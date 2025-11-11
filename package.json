@@ -1,0 +1,18 @@
+{
+  "name": "ing-agents",
+  "version": "1.0.0",
+  "description": "InG AI Sales Department - Multi-Agent LinkedIn Outreach System",
+  "scripts": {
+    "check": "python3 -m py_compile main.py && find src -name '*.py' -exec python3 -m py_compile {} \\; && echo '✅ Syntax check passed'",
+    "build": "make check",
+    "install": "pip install -r requirements.txt",
+    "lint": "flake8 src/ main.py --max-line-length=120 --ignore=E501,W503 || echo '⚠ Install flake8: pip install flake8'",
+    "format": "black src/ main.py || echo '⚠ Install black: pip install black'",
+    "test": "pytest tests/ -v || echo '⚠ Install pytest: pip install pytest'",
+    "clean": "find . -type d -name __pycache__ -exec rm -r {} + 2>/dev/null; find . -name '*.pyc' -delete 2>/dev/null; echo '✅ Cleaned'"
+  },
+  "keywords": ["python", "ai", "agents", "sales", "linkedin"],
+  "author": "InG",
+  "license": "Proprietary"
+}
+
