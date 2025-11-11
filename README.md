@@ -39,6 +39,11 @@ All project documentation is located in the `docs/` directory (condensed version
 - **04-test-plan.md**: Test plan and methodology for QA engineers
 - **05-agent-context-management.md**: How agents preserve and share context
 - **06-deployment-and-running.md**: How to run and deploy the system
+- **07-prompt-compliance-check.md**: Compliance check with original requirements
+- **08-google-sheets-schema.md**: Detailed Google Sheets schema with column names
+- **09-llm-prompts.md**: LLM prompt templates for each agent
+- **10-api-integrations.md**: External API integration details (Gemini, Sheets, LinkedIn, SMTP)
+- **11-daily-report-format.md**: Daily report format and examples
 
 ## Quick Start
 
@@ -47,7 +52,9 @@ All project documentation is located in the `docs/` directory (condensed version
 pip install -r requirements.txt
 ```
 
-2. Configure environment variables (see `config/.env.example`)
+2. Configure environment variables:
+   - Copy `config/env.example.txt` to `.env` and fill in your values
+   - Copy `config/agents.yaml.example` to `config/agents.yaml` and adjust as needed
 
 3. Set up Google Sheets credentials
 
