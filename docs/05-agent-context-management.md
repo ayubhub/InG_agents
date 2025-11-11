@@ -3,7 +3,7 @@
 ## Document Information
 - **Document Type**: Technical Architecture - Context Management
 - **Target Audience**: Developers, Architects
-- **Version**: 1.1 (Condensed)
+- **Version**: 1.2 (Updated - Context Strategy Resolved)
 - **Date**: January 2025
 - **Project**: InG AI Sales Department - Multi-Agent System
 
@@ -20,7 +20,7 @@ How AI agents preserve working context (memory, decisions, learning) and share i
 ### 1. Operational Context (Short-term)
 Current work state: active tasks, allocations, rate limiter state, recent decisions.
 
-**Storage**: In-memory + Redis cache + Google Sheets backup  
+**Storage**: In-memory + Local file cache (`data/cache/`) + Google Sheets backup  
 **Lifetime**: Hours to days
 
 ### 2. Historical Context (Long-term)
@@ -131,15 +131,19 @@ Agents periodically save complete context snapshots.
 
 When agents use LLM, they include relevant context from other agents.
 
+**Token Limit**: Up to 200K tokens for context injection (Google Gemini API)
+
 **Example**:
 ```python
 # Build prompt with context from other agents
 prompt = llm_context_manager.build_prompt_with_context(
     base_prompt="Generate message...",
     agent_name="outreach",
-    context_types=["operational", "knowledge", "historical"]
+    context_types=["operational", "knowledge", "historical"],
+    max_tokens=200000  # 200K token limit
 )
 # LLM now has: template performance, recent successes, current strategy
+# Context is summarised/compressed if exceeds limit
 ```
 
 ---
@@ -179,24 +183,27 @@ def start(self):
 
 ---
 
-## Questions
+## Context Management Strategy (Resolved)
 
-**Q1**: Context size and LLM token limits?  
-**Answer**: Use summarisation, compression, embeddings for semantic search
+### Context Size and LLM Token Limits
+- **Token Limit**: Up to 200K tokens for context injection
+- **Strategy**: Use summarisation, compression, and embeddings for semantic search
+- **Implementation**: 
+  - Summarise historical context before injection
+  - Compress large context blocks
+  - Use embeddings for relevant context retrieval
+  - Prioritise recent and relevant context
 
-**Q2**: Context consistency across agents?  
-**Answer**: Single source of truth (Google Sheets), SQLite-based locking, file-based events with ordering, optimistic locking
+### Context Consistency Across Agents
+- **Approach**: Single source of truth (Google Sheets)
+- **Coordination**: SQLite-based locking for concurrent access
+- **Event Ordering**: File-based events with timestamp ordering
+- **Conflict Resolution**: Optimistic locking with retry mechanism
+- **State Synchronisation**: Periodic sync every 15 minutes
 
-**Q3**: Context security?  
-**Answer**: Encrypt at rest, secure API (TLS), access control, audit logging
-
----
-
-## Future Enhancements
-
-1. Vector database for semantic context search
-2. Context compression and summarisation
-3. ML models for context relevance scoring
+### Context Security
+- **Status**: Not implemented in this stage
+- **Future**: Security measures (encryption, access control) to be considered in later stages
 
 ---
 
