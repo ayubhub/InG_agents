@@ -38,6 +38,7 @@ All project documentation is located in the `docs/` directory (condensed version
 - **03-technical-specification.md**: Implementation specification for developers
 - **04-test-plan.md**: Test plan and methodology for QA engineers
 - **05-agent-context-management.md**: How agents preserve and share context
+- **06-deployment-and-running.md**: How to run and deploy the system
 
 ## Quick Start
 
@@ -50,10 +51,12 @@ pip install -r requirements.txt
 
 3. Set up Google Sheets credentials
 
-4. Run the agent:
+4. Run all agents (one command):
 ```bash
 python main.py
 ```
+
+**Note**: This single command starts all three agents (Sales Manager, Lead Finder, Outreach) in parallel. They run continuously until stopped (Ctrl+C). See `docs/06-deployment-and-running.md` for details.
 
 ## Features
 
