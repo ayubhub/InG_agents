@@ -1,0 +1,3 @@
+# Local data directory
+# Contains: SQLite database, message queue, cache, events, logs
+

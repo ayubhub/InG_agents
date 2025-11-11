@@ -193,7 +193,7 @@ AI-powered sales department with three specialised agents: **Sales Manager Agent
 - **Mitigation**: Strict rate limiting (30-50/day, 5-15 min intervals, 8-hour window) as per requirements
 
 **C2**: Agent coordination complexity
-- **Solution**: Simplest approach based on Google Sheets as single source of truth, Redis for message queue
+- **Solution**: Simplest approach based on Google Sheets as single source of truth, **file-based message queue** (no servers needed)
 
 **C3**: Data quality and error reduction
 - **Solution**: 

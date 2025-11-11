@@ -3,7 +3,7 @@
 ## Document Information
 - **Document Type**: Technical Solution Architecture
 - **Target Audience**: Solution Architect, Technical Lead
-- **Version**: 2.2 (Updated with Stakeholder Feedback)
+- **Version**: 2.3 (Updated - Local Storage)
 - **Date**: January 2025
 - **Project**: InG AI Sales Department - Multi-Agent LinkedIn Outreach System
 
@@ -11,9 +11,9 @@
 
 ## Executive Summary
 
-Multi-agent, event-driven architecture with three AI agents: **Sales Manager** (coordinates), **Lead Finder** (discovers), **Outreach** (messages). Uses Google Sheets as database, Redis for messaging, **Google Gemini Preview API** for LLM intelligence.
+Multi-agent, event-driven architecture with three AI agents: **Sales Manager** (coordinates), **Lead Finder** (discovers), **Outreach** (messages). Uses Google Sheets as primary database, **local file-based storage** (SQLite + JSON files) for message queue and caching, **Google Gemini Preview API** for LLM intelligence.
 
-**Design Principle**: Simple solution based on Google Sheets, no over-engineering.
+**Design Principle**: Simple solution based on Google Sheets and local files, no servers, no over-engineering.
 
 ---
 
@@ -32,9 +32,10 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
               │          │
     ┌─────────▼──────────▼──────────┐
     │  Shared State & Communication  │
-    │  - Google Sheets (Database)     │
-    │  - Redis (Message Queue)        │
-    │  - Event Bus (Pub/Sub)          │
+    │  - Google Sheets (Primary DB)   │
+    │  - SQLite (Local State)         │
+    │  - File-based Message Queue     │
+    │  - JSON Files (Cache/Events)    │
     └─────────┬──────────────────────┘
               │
     ┌─────────▼──────────┐
@@ -48,8 +49,9 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
 ### Technology Stack
 - **Language**: Python 3.10+
 - **LLM**: **Google Gemini Preview API** (cost-effective, high quality)
-- **Database**: Google Sheets (primary, single source of truth)
-- **Message Queue**: Redis Pub/Sub
+- **Database**: Google Sheets (primary), **SQLite** (local state, no server needed)
+- **Message Queue**: **File-based** (JSON files in `data/queue/` directory)
+- **Cache**: **File-based** (JSON files in `data/cache/` directory)
 - **Scheduling**: APScheduler
 - **LinkedIn**: Dripify/Gojiberry API (single account)
 
@@ -90,7 +92,15 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
 
 ## Inter-Agent Communication
 
-### Message Queue (Redis)
+### File-Based Message Queue
+
+**Location**: `data/queue/` directory
+
+**Structure**: Each event stored as JSON file
+- `data/queue/pending/{timestamp}_{event_id}.json` - Pending events
+- `data/queue/processed/{timestamp}_{event_id}.json` - Processed events (archive)
+- `data/queue/failed/{timestamp}_{event_id}.json` - Failed events
+
 **Event Types**:
 - `lead_discovered` - Lead Finder → Sales Manager
 - `lead_allocation` - Sales Manager → Outreach
@@ -105,20 +115,31 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
   "agent": "agent_name",
   "data": {...},
   "context": {...},
-  "timestamp": "ISO8601"
+  "timestamp": "ISO8601",
+  "event_id": "unique_id"
 }
 ```
 
-### Event Bus (Pub/Sub)
-- Channels: `agent.{agent_name}.{event_type}`
-- Real-time notifications
-- State synchronisation
+**Processing**:
+- Agents poll `data/queue/pending/` directory for new events
+- Process events matching subscribed types
+- Move processed events to `processed/` directory
+- Retry failed events (max 3 attempts)
+
+### Event Bus (File-Based Pub/Sub)
+
+**Location**: `data/events/` directory
+
+**Structure**:
+- `data/events/{agent_name}/{event_type}/` - Event files by agent and type
+- Agents watch directories for new files
+- File-based notifications (file creation triggers processing)
 
 ---
 
 ## Shared State Management
 
-### Google Sheets Schema (Simple Approach)
+### Google Sheets (Primary Database)
 
 **Leads Sheet** (Primary):
 - Lead ID, Name, Position, Company, LinkedIn URL
@@ -131,9 +152,56 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
 - Context Data (JSON), LLM Reasoning
 - Related Lead ID
 
+### SQLite (Local State Database)
+
+**Location**: `data/state/agents.db`
+
+**Tables**:
+- `agent_state` - Current state of each agent
+- `rate_limiter` - Rate limiting state
+- `message_queue_index` - Index of queued messages
+- `agent_context` - Agent context snapshots
+- `locks` - Row-level locks for Google Sheets updates
+
+**Schema**:
+```sql
+CREATE TABLE agent_state (
+    agent_name TEXT PRIMARY KEY,
+    state_data TEXT,  -- JSON
+    last_updated TIMESTAMP
+);
+
+CREATE TABLE rate_limiter (
+    id INTEGER PRIMARY KEY,
+    daily_count INTEGER,
+    last_send_time TIMESTAMP,
+    last_reset_date DATE
+);
+
+CREATE TABLE message_queue_index (
+    event_id TEXT PRIMARY KEY,
+    event_type TEXT,
+    agent_from TEXT,
+    agent_to TEXT,
+    status TEXT,  -- pending, processed, failed
+    file_path TEXT,
+    created_at TIMESTAMP
+);
+```
+
+### File-Based Cache
+
+**Location**: `data/cache/` directory
+
+**Structure**:
+- `data/cache/knowledge/{topic}.json` - Shared knowledge cache
+- `data/cache/agent_context/{agent_name}.json` - Agent context cache
+- `data/cache/llm_responses/{hash}.json` - Cached LLM responses
+
 ### State Manager
 - **Simple approach**: Google Sheets as single source of truth
-- Row-level locking for concurrent updates (Redis-based)
+- SQLite for local state (locks, rate limiter, queue index)
+- File-based message queue
 - Optimistic locking with retry
 - Conflict resolution
 
@@ -165,6 +233,8 @@ llm:
 - Reasonable rate limits
 
 **Fallback**: Rule-based logic if API unavailable
+
+**Caching**: LLM responses cached in `data/cache/llm_responses/` to reduce API calls
 
 ---
 
@@ -214,6 +284,13 @@ outreach:
   linkedin_accounts: 1  # Single account
   response_check_interval: "2 hours"
   acceptable_error_rate: 0.10  # 10% for sentiment analysis
+
+storage:
+  data_directory: "data"  # Local data directory
+  sqlite_db: "data/state/agents.db"
+  queue_directory: "data/queue"
+  cache_directory: "data/cache"
+  events_directory: "data/events"
 ```
 
 ---
@@ -250,18 +327,48 @@ outreach:
 
 ---
 
+## Local Storage Structure
+
+### Directory Layout
+
+```
+data/
+├── state/
+│   └── agents.db              # SQLite database
+├── queue/
+│   ├── pending/               # Pending events
+│   ├── processed/             # Processed events (archive)
+│   └── failed/                # Failed events
+├── cache/
+│   ├── knowledge/             # Shared knowledge
+│   ├── agent_context/        # Agent context cache
+│   └── llm_responses/        # Cached LLM responses
+├── events/
+│   ├── sales_manager/        # Events for Sales Manager
+│   ├── lead_finder/          # Events for Lead Finder
+│   └── outreach/             # Events for Outreach
+└── logs/
+    └── agents.log             # Application logs
+```
+
+---
+
 ## Scalability
 
 ### Current (Sprint 1)
 - Single instance per agent
 - 200+ leads/week
-- **Google Sheets as database** (simple, sufficient)
+- **Google Sheets as primary database** (simple, sufficient)
+- **SQLite for local state** (no server needed)
+- **File-based message queue** (no server needed)
 - Single LinkedIn account
 - No complex scaling needed
+- **No separate servers** - everything runs locally
 
 ### Future Considerations (Post-Sprint 1)
 - Database migration only if Google Sheets becomes bottleneck
 - Keep architecture simple
+- All storage remains local (no servers)
 
 ---
 
@@ -270,35 +377,36 @@ outreach:
 - Credentials in environment variables
 - API keys rotated every 90 days
 - Encrypted communications (TLS)
-- Audit logging
+- Audit logging to local files
 - GDPR compliance
 - LinkedIn ToS compliance (strict rate limiting)
+- Local data directory permissions (restrict access)
 
 ---
 
 ## Resolved Questions
 
-**Q1**: LLM API - **Google Gemini Preview API** (cost-effective, high quality)
+**Q1**: LLM API - **Google Gemini Preview API** (cost-effective, high quality) ✅
 
-**Q2**: Inter-agent communication - Redis Pub/Sub with Google Sheets as backup
+**Q2**: Inter-agent communication - **File-based message queue** (JSON files in `data/queue/`) with SQLite index ✅
 
-**Q3**: Database consistency - Simple optimistic locking, Google Sheets sufficient
+**Q3**: Database consistency - Simple optimistic locking, Google Sheets sufficient, SQLite for local state ✅
 
-**Q4**: LLM response quality - Gemini provides good quality, 10% error rate acceptable for sentiment analysis
+**Q4**: LLM response quality - Gemini provides good quality, 10% error rate acceptable for sentiment analysis ✅
 
-**Q5**: Agent failure recovery - State recovery from Google Sheets on restart
+**Q5**: Agent failure recovery - State recovery from Google Sheets and SQLite on restart ✅
 
 ---
 
 ## Resolved Concerns
 
-**C1**: Google Sheets scalability - **Sufficient for Sprint 1**, simple solution preferred
+**C1**: Google Sheets scalability - **Sufficient for Sprint 1**, simple solution preferred ✅
 
-**C2**: LLM API dependency - **Google Gemini** chosen, rule-based fallback available
+**C2**: LLM API dependency - **Google Gemini** chosen, rule-based fallback available ✅
 
-**C3**: Agent coordination - **Simplest approach** with Google Sheets + Redis
+**C3**: Agent coordination - **Simplest approach** with Google Sheets + **SQLite + file-based queue** (no servers) ✅
 
-**C4**: LinkedIn compliance - **Single account**, strict rate limiting (30-50/day, 5-15 min intervals)
+**C4**: LinkedIn compliance - **Single account**, strict rate limiting (30-50/day, 5-15 min intervals) ✅
 
 ---
 
@@ -308,7 +416,7 @@ outreach:
 - Simple scoring algorithm based on conversion patterns
 - Can be enhanced later
 
-**I2-I8**: **Deferred to future sprints**
+**I2-I8**: **Deferred to future sprints** ✅
 
 ---
 

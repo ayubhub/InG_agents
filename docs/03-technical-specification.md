@@ -174,17 +174,26 @@ class LLMClient:
 
 ---
 
-## Message Queue Interface
+## Message Queue Interface (File-Based)
 
 ### MessageQueue
 
 ```python
 class MessageQueue:
-    def __init__(self, redis_config: Dict)
+    def __init__(self, queue_directory: str = "data/queue", sqlite_db: str = "data/state/agents.db")
     def publish(self, event: Dict) -> None
     def subscribe(self, event_types: List[str], callback: Callable, agent_name: str) -> None
     def process_messages(self, agent_name: str) -> None
+    def _save_event_to_file(self, event: Dict) -> str  # Returns file path
+    def _load_events_from_directory(self, directory: str) -> List[Dict]
 ```
+
+**Implementation**:
+- Events stored as JSON files in `data/queue/pending/`
+- SQLite index tracks event status
+- Agents poll directory for new events
+- Processed events moved to `data/queue/processed/`
+- Failed events moved to `data/queue/failed/`
 
 **Event Types**: `lead_discovered`, `lead_allocation`, `message_sent`, `response_received`, `agent_error`
 
@@ -196,14 +205,22 @@ class MessageQueue:
 
 ```python
 class StateManager:
-    def read_leads(self, filters: Dict) -> List[Lead]
-    def update_lead(self, lead_id: str, updates: Dict) -> bool
+    def __init__(self, google_sheets_client, sqlite_db_path: str = "data/state/agents.db")
+    def read_leads(self, filters: Dict) -> List[Lead]  # From Google Sheets
+    def update_lead(self, lead_id: str, updates: Dict) -> bool  # Update Google Sheets
     def allocate_leads(self, lead_ids: List[str], agent: str) -> bool
-    def save_agent_context(self, agent_name: str, context: Dict) -> None
+    def save_agent_context(self, agent_name: str, context: Dict) -> None  # To SQLite + files
     def get_agent_context(self, agent_name: str, context_type: str) -> Dict
+    def acquire_lock(self, resource_id: str, agent_name: str) -> bool  # SQLite-based lock
+    def release_lock(self, resource_id: str) -> None
 ```
 
-**Features**: Optimistic locking, conflict resolution, version tracking
+**Storage**:
+- **Google Sheets**: Primary database for leads
+- **SQLite**: Local state (agent state, locks, rate limiter, queue index)
+- **File System**: Context cache, knowledge base, LLM response cache
+
+**Features**: Optimistic locking (SQLite), conflict resolution, version tracking
 
 ---
 
@@ -236,6 +253,13 @@ outreach:
   linkedin_accounts: 1  # Single account
   response_check_interval: "2 hours"
   acceptable_error_rate: 0.10  # 10% for sentiment analysis
+
+storage:
+  data_directory: "data"  # Local data directory
+  sqlite_db: "data/state/agents.db"
+  queue_directory: "data/queue"
+  cache_directory: "data/cache"
+  events_directory: "data/events"
 ```
 
 ---
@@ -245,9 +269,11 @@ outreach:
 See `requirements.txt`:
 - LLM: `google-generativeai` (Gemini API)
 - Database: `gspread`, `google-auth`
-- Message Queue: `redis`
+- Local Storage: SQLite (built-in Python), file system (JSON files)
 - Scheduling: `APScheduler`
 - Configuration: `PyYAML`, `python-dotenv`
+
+**Note**: No Redis or external servers needed. All storage is local (SQLite + files).
 
 ---
 

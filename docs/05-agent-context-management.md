@@ -54,14 +54,19 @@ High-level strategy: decision reasoning, performance insights, optimisations.
 - Context Data (JSON), LLM Reasoning
 - Related Lead ID, Performance Impact
 
-### Layer 2: Redis Cache (Fast Access)
+### Layer 2: Local File Cache (Fast Access)
 
-**Key Patterns**:
-- `agent:{agent_name}:state` - Current agent state
-- `knowledge:{topic}` - Shared knowledge cache
-- `lock:{resource}` - Coordination locks
-- `events:recent` - Recent events (last 100)
-- `context:{agent_name}:{key}` - Agent-specific context
+**Location**: `data/cache/` directory
+
+**File Structure**:
+- `data/cache/agent_state/{agent_name}.json` - Current agent state
+- `data/cache/knowledge/{topic}.json` - Shared knowledge cache
+- `data/cache/agent_context/{agent_name}_{key}.json` - Agent-specific context
+- `data/cache/llm_responses/{hash}.json` - Cached LLM responses
+
+**SQLite for Locks**:
+- `data/state/agents.db` - Locks table for coordination
+- `locks` table: resource_id, agent_name, acquired_at, expires_at
 
 ### Layer 3: Log Files (Audit Trail)
 
@@ -159,8 +164,9 @@ def start(self):
 
 - Save context every 15 minutes
 - Save on shutdown
-- Update Redis cache
-- Store in Google Sheets
+- Update file cache (`data/cache/`)
+- Update SQLite database (`data/state/agents.db`)
+- Store in Google Sheets (optional, for backup)
 
 ---
 
@@ -179,7 +185,7 @@ def start(self):
 **Answer**: Use summarisation, compression, embeddings for semantic search
 
 **Q2**: Context consistency across agents?  
-**Answer**: Single source of truth (Google Sheets), event ordering, optimistic locking
+**Answer**: Single source of truth (Google Sheets), SQLite-based locking, file-based events with ordering, optimistic locking
 
 **Q3**: Context security?  
 **Answer**: Encrypt at rest, secure API (TLS), access control, audit logging

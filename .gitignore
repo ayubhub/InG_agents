@@ -41,6 +41,16 @@ ENV/
 # Logs
 logs/
 *.log
+data/logs/*.log
+
+# Local Data (exclude data but keep structure)
+data/state/*.db
+data/state/*.db-journal
+data/queue/**/*.json
+data/cache/**/*.json
+data/events/**/*.json
+!data/.gitkeep
+!data/**/.gitkeep
 
 # Configuration (sensitive)
 config/google-credentials.json

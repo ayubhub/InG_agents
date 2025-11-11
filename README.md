@@ -58,23 +58,24 @@ python main.py
 ## Features
 
 - **Three AI Agents**: Sales Manager (coordination), Lead Finder (prospecting), Outreach (messaging)
-- **LLM Integration**: OpenAI/Anthropic for intelligent decisions and message generation
-- **Inter-Agent Communication**: Redis message queue for coordination
-- **Shared State Management**: Google Sheets as database, Redis for caching
+- **LLM Integration**: Google Gemini Preview API for intelligent decisions and message generation
+- **Inter-Agent Communication**: File-based message queue (no servers needed)
+- **Shared State Management**: Google Sheets as database, SQLite + local files for state
 - **Automated Lead Classification**: Speaker/Sponsor classification with quality scoring
 - **Personalised Messages**: LLM-generated messages with context from other agents
-- **Response Analysis**: Sentiment and intent detection using LLM
+- **Response Analysis**: Sentiment and intent detection using LLM (10% error rate acceptable)
 - **Rate-Limited Outreach**: 30-50 messages/day, compliance with LinkedIn ToS
-- **Daily Reports**: Comprehensive performance reports with insights
+- **Daily Reports**: Comprehensive performance reports with Agent Self-Review section
 - **Context Sharing**: Agents share knowledge and context for better decisions
+- **No External Servers**: All storage is local (SQLite + files)
 
 ## Requirements
 
 - Python 3.10+
-- Redis server (for message queue)
+- **No external servers needed** - all storage is local (SQLite + files)
 - Google Sheets API access
 - LinkedIn automation service (Dripify or Gojiberry)
-- LLM API access (OpenAI or Anthropic)
+- Google Gemini Preview API access
 - SMTP email access for reports
 
 ## License

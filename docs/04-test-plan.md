@@ -109,17 +109,19 @@ Comprehensive test plan for three AI agents: unit, integration, system, and acce
 ## Test Environment
 
 ### Prerequisites
-- Python 3.10+, Redis server, Test Google Sheet
+- Python 3.10+, Test Google Sheet
 - Test API credentials (Google Sheets, LinkedIn, **Google Gemini API**)
 - Test SMTP server
 - **Single LinkedIn test account** (no multi-account testing)
+- **No external servers needed** - all storage is local (SQLite + files)
 
 ### Setup
 ```bash
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-docker run -d -p 6379:6379 redis:latest  # Message queue
+# No Redis or external servers needed
+mkdir -p data/{state,queue,cache,events,logs}
 # Configure .env.test with test credentials
 pytest tests/ -v --cov=src --cov-report=html
 ```
@@ -136,7 +138,7 @@ pytest tests/ -v --cov=src --cov-report=html
 - Sample responses (positive/negative/neutral)
 - Historical performance data (2+ weeks)
 
-**Maintenance**: Reset test data between runs, clear message queue, maintain separate test accounts
+**Maintenance**: Reset test data between runs, clear `data/queue/` and `data/cache/` directories, maintain separate test accounts
 
 ---
 
@@ -146,7 +148,7 @@ pytest tests/ -v --cov=src --cov-report=html
 **Answer**: Use mock Gemini responses for unit tests, real API for integration. Validate structure and quality, not exact text. **10% error rate acceptable** for sentiment analysis.
 
 **Q2**: Inter-agent communication testing - how to test message queue reliability?  
-**Answer**: Use real Redis for integration tests. Test failure scenarios. Monitor message delivery rates (target: 99%+).
+**Answer**: Use file-based queue (`data/queue/`) for integration tests. Test failure scenarios. Monitor message delivery rates (target: 99%+). Verify file operations and SQLite index consistency.
 
 **Q3**: State management testing - how to test concurrent updates?  
 **Answer**: Test with multiple concurrent agents. Verify optimistic locking and conflict resolution work correctly.
@@ -159,7 +161,7 @@ pytest tests/ -v --cov=src --cov-report=html
 **Mitigation**: Google Gemini API is cost-effective. Use mocks for most unit tests, limit real API calls in integration tests.
 
 **C2**: Test environment complexity (multi-agent system)  
-**Mitigation**: Use Docker Compose for test environment. Automate setup. Keep it simple - Google Sheets + Redis.
+**Mitigation**: No external servers needed. Simple setup - Google Sheets + SQLite + local files. Automate directory creation and cleanup.
 
 ---
 
