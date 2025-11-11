@@ -1,36 +1,28 @@
-# InG LinkedIn Outreach Automation Agent
+# InG AI Sales Department - Multi-Agent LinkedIn Outreach System
 
-Automated LinkedIn outreach agent for identifying and contacting potential speakers and sponsors for tech events.
+AI-powered sales department with three specialised agents: **Sales Manager Agent** (coordinates operations), **Lead Finder Agent** (discovers prospects), and **Outreach Agent** (sends messages and analyses responses). Human team focuses on deal closure.
 
 ## Project Structure
 
 ```
 InG_agents/
-├── docs/                          # Documentation
-│   ├── 01-use-cases.md           # Use cases for business analyst
-│   ├── 02-technical-solution.md  # Technical solution for architect
-│   ├── 03-technical-specification.md  # Technical spec for programmer
-│   └── 04-test-plan.md           # Test plan for QA engineer
+├── docs/                          # Documentation (condensed versions)
+│   ├── 01-use-cases.md           # Use cases for business analyst (~160 lines)
+│   ├── 02-technical-solution.md  # Technical solution for architect (~250 lines)
+│   ├── 03-technical-specification.md  # Technical spec for programmer (~280 lines)
+│   ├── 04-test-plan.md           # Test plan for QA engineer (~160 lines)
+│   └── 05-agent-context-management.md  # Context management (~200 lines)
 ├── src/                           # Source code
+│   ├── agents/                    # AI agents
+│   │   ├── sales_manager_agent.py
+│   │   ├── lead_finder_agent.py
+│   │   └── outreach_agent.py
 │   ├── core/                     # Core business logic
-│   │   ├── prospect_classifier.py
-│   │   ├── message_generator.py
-│   │   └── rate_limiter.py
 │   ├── integrations/             # External service integrations
-│   │   ├── google_sheets_io.py
-│   │   ├── linkedin_sender.py
-│   │   └── email_service.py
+│   ├── communication/            # Inter-agent communication
 │   └── utils/                     # Utility modules
-│       ├── config_loader.py
-│       ├── logger.py
-│       └── validators.py
 ├── tests/                         # Test suite
-│   ├── unit/                     # Unit tests
-│   └── integration/              # Integration tests
 ├── config/                        # Configuration files
-│   ├── config.yaml
-│   ├── templates.yaml
-│   └── .env.example
 ├── logs/                          # Application logs
 ├── main.py                        # Main entry point
 ├── requirements.txt               # Python dependencies
@@ -39,12 +31,13 @@ InG_agents/
 
 ## Documentation
 
-All project documentation is located in the `docs/` directory:
+All project documentation is located in the `docs/` directory (condensed versions, ~200-300 lines each):
 
 - **01-use-cases.md**: Business use cases and requirements for analysts
 - **02-technical-solution.md**: Architecture and technical solution for architects
-- **03-technical-specification.md**: Detailed implementation specification for developers
+- **03-technical-specification.md**: Implementation specification for developers
 - **04-test-plan.md**: Test plan and methodology for QA engineers
+- **05-agent-context-management.md**: How agents preserve and share context
 
 ## Quick Start
 
@@ -64,18 +57,24 @@ python main.py
 
 ## Features
 
-- Automated lead classification (Speakers/Sponsors)
-- Personalised message generation
-- Rate-limited LinkedIn outreach
-- Google Sheets integration for lead management
-- Daily activity reports via email
-- Comprehensive error handling and logging
+- **Three AI Agents**: Sales Manager (coordination), Lead Finder (prospecting), Outreach (messaging)
+- **LLM Integration**: OpenAI/Anthropic for intelligent decisions and message generation
+- **Inter-Agent Communication**: Redis message queue for coordination
+- **Shared State Management**: Google Sheets as database, Redis for caching
+- **Automated Lead Classification**: Speaker/Sponsor classification with quality scoring
+- **Personalised Messages**: LLM-generated messages with context from other agents
+- **Response Analysis**: Sentiment and intent detection using LLM
+- **Rate-Limited Outreach**: 30-50 messages/day, compliance with LinkedIn ToS
+- **Daily Reports**: Comprehensive performance reports with insights
+- **Context Sharing**: Agents share knowledge and context for better decisions
 
 ## Requirements
 
 - Python 3.10+
+- Redis server (for message queue)
 - Google Sheets API access
 - LinkedIn automation service (Dripify or Gojiberry)
+- LLM API access (OpenAI or Anthropic)
 - SMTP email access for reports
 
 ## License
