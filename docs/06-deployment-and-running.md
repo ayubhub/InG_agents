@@ -13,6 +13,8 @@
 
 **Один главный скрипт** (`main.py`) запускает все три агента параллельно. Агенты работают как фоновые процессы/потоки, общаются через файловую очередь и работают 24/7 до остановки.
 
+**Логика запуска** (как в prompt-01.md): Скрипт запускается каждый день в 9:00 (через cron). При запуске проверяется, работает ли уже процесс. Если работает - новый процесс выходит. Если процесс "упал" - новый продолжает работу.
+
 ---
 
 ## Architecture Overview
@@ -49,6 +51,8 @@ Launches all three agents and manages their lifecycle.
 
 import signal
 import sys
+import os
+import psutil
 from multiprocessing import Process
 from src.agents.sales_manager_agent import SalesManagerAgent
 from src.agents.lead_finder_agent import LeadFinderAgent
@@ -143,7 +147,58 @@ def signal_handler(signum, frame):
     orchestrator.stop_all_agents()
     sys.exit(0)
 
+def check_existing_process(lock_file_path="data/state/main.pid"):
+    """Check if another instance is already running"""
+    import os
+    import psutil
+    
+    if os.path.exists(lock_file_path):
+        try:
+            with open(lock_file_path, 'r') as f:
+                pid = int(f.read().strip())
+            
+            # Check if process is still alive
+            if psutil.pid_exists(pid):
+                try:
+                    process = psutil.Process(pid)
+                    # Check if it's our process
+                    if 'python' in process.name().lower() and 'main.py' in ' '.join(process.cmdline()):
+                        return True, pid  # Process is running
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            
+            # PID file exists but process is dead - remove stale lock
+            os.remove(lock_file_path)
+        except (ValueError, FileNotFoundError):
+            pass
+    
+    return False, None
+
+def create_lock_file(lock_file_path="data/state/main.pid"):
+    """Create lock file with current PID"""
+    import os
+    os.makedirs(os.path.dirname(lock_file_path), exist_ok=True)
+    with open(lock_file_path, 'w') as f:
+        f.write(str(os.getpid()))
+
+def remove_lock_file(lock_file_path="data/state/main.pid"):
+    """Remove lock file"""
+    import os
+    if os.path.exists(lock_file_path):
+        os.remove(lock_file_path)
+
 if __name__ == "__main__":
+    lock_file = "data/state/main.pid"
+    
+    # Check if another instance is running
+    is_running, existing_pid = check_existing_process(lock_file)
+    if is_running:
+        print(f"Another instance is already running (PID: {existing_pid}). Exiting.")
+        sys.exit(0)
+    
+    # Create lock file
+    create_lock_file(lock_file)
+    
     orchestrator = AgentOrchestrator()
     
     # Register signal handlers for graceful shutdown
@@ -161,6 +216,7 @@ if __name__ == "__main__":
                     orchestrator.logger.error(f"Agent process died: {process.pid}")
                     # Optionally restart or exit
                     orchestrator.stop_all_agents()
+                    remove_lock_file(lock_file)
                     sys.exit(1)
             
             import time
@@ -168,10 +224,14 @@ if __name__ == "__main__":
             
     except KeyboardInterrupt:
         orchestrator.stop_all_agents()
+        remove_lock_file(lock_file)
     except Exception as e:
         orchestrator.logger.error(f"Fatal error: {e}")
         orchestrator.stop_all_agents()
+        remove_lock_file(lock_file)
         sys.exit(1)
+    finally:
+        remove_lock_file(lock_file)
 ```
 
 ---
@@ -217,10 +277,14 @@ python main.py
 ```
 
 **Что происходит**:
-1. Загружается конфигурация
-2. Инициализируются общие компоненты (StateManager, MessageQueue, LLMClient)
-3. Запускаются три агента в отдельных процессах
-4. Главный процесс остается живым и мониторит агентов
+1. Проверяется, не запущен ли уже процесс (через `data/state/main.pid`)
+2. Если процесс уже работает - новый процесс выходит с сообщением
+3. Если процесс "упал" или не найден - создается lock file и запускаются агенты
+4. Загружается конфигурация
+5. Инициализируются общие компоненты (StateManager, MessageQueue, LLMClient)
+6. Запускаются три агента в отдельных процессах
+7. Главный процесс остается живым и мониторит агентов
+8. При завершении lock file удаляется
 
 ### Остановка системы
 
@@ -268,9 +332,65 @@ python -m src.agents.outreach_agent
 - Сложнее управлять
 - Нет централизованного мониторинга
 
-### Вариант 2: Systemd service (для production)
+### Вариант 2: Ежедневный запуск в 9:00 (как в prompt-01.md) - РЕКОМЕНДУЕТСЯ
 
-Создать systemd service для автоматического запуска:
+**Логика работы** (как указано в prompt-01.md):
+- Скрипт запускается каждый день в 9:00 через cron
+- При запуске проверяется, работает ли уже процесс
+- Если процесс работает - новый процесс выходит (не дублирует)
+- Если процесс "упал" - новый продолжает работу
+
+**Через cron** (рекомендуется):
+```bash
+# Добавить в crontab
+crontab -e
+
+# Запускать каждый день в 9:00
+0 9 * * * cd /path/to/InG_agents && /path/to/venv/bin/python main.py >> /path/to/logs/cron.log 2>&1
+```
+
+**Через systemd timer** (более надежно):
+```ini
+# /etc/systemd/system/ing-agents.service
+[Unit]
+Description=InG AI Sales Department Agents
+After=network.target
+
+[Service]
+Type=simple
+User=ing-user
+WorkingDirectory=/path/to/InG_agents
+ExecStart=/path/to/venv/bin/python main.py
+Restart=no  # Не перезапускать автоматически, только по расписанию
+
+# /etc/systemd/system/ing-agents.timer
+[Unit]
+Description=Run InG Agents daily at 9:00
+
+[Timer]
+OnCalendar=daily
+OnCalendar=09:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Активация:
+```bash
+sudo systemctl enable ing-agents.timer
+sudo systemctl start ing-agents.timer
+```
+
+**Преимущества**:
+- ✅ Защита от дублирования процессов (автоматическая проверка)
+- ✅ Автоматический перезапуск при падении процесса
+- ✅ Простота управления через cron/systemd
+- ✅ Соответствует prompt-01.md
+
+### Вариант 3: Systemd service (постоянная работа, для production)
+
+Создать systemd service для постоянной работы (24/7):
 
 ```ini
 # /etc/systemd/system/ing-agents.service
@@ -296,7 +416,11 @@ sudo systemctl start ing-agents
 sudo systemctl enable ing-agents  # Автозапуск при загрузке
 ```
 
-### Вариант 3: Docker (опционально, для будущего)
+**Рекомендация**: 
+- **Вариант 2** (ежедневный запуск в 9:00) - соответствует prompt-01.md, рекомендуется для Sprint 1
+- **Вариант 3** (постоянная работа) - альтернатива для production, если нужна максимальная надежность
+
+### Вариант 4: Docker (опционально, для будущего)
 
 ```dockerfile
 FROM python:3.10-slim

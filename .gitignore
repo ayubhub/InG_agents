@@ -46,6 +46,7 @@ data/logs/*.log
 # Local Data (exclude data but keep structure)
 data/state/*.db
 data/state/*.db-journal
+data/state/*.pid  # Process lock file
 data/queue/**/*.json
 data/cache/**/*.json
 data/events/**/*.json
