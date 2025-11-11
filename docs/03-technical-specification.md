@@ -77,11 +77,14 @@ class SalesManagerAgent(BaseAgent):
 
 ```python
 class LeadFinderAgent(BaseAgent):
-    def search_for_leads(self, criteria: Dict) -> List[Lead]
-    def analyse_profile(self, profile_data: Dict) -> Lead
+    def read_uncontacted_leads(self) -> List[Lead]  # Reads from Google Sheets
+    def analyse_lead(self, lead: Lead) -> Lead  # Analyses existing lead data
     def classify_prospect(self, lead: Lead) -> str
     def calculate_quality_score(self, lead: Lead) -> float
+    def update_lead_classification(self, lead: Lead) -> bool  # Updates in Google Sheets
 ```
+
+**Note**: Agent reads leads that are already in Google Sheets (imported from Clay.com or other sources). Agent does not search LinkedIn.
 
 ### Outreach Agent
 
@@ -160,12 +163,14 @@ class LLMClient:
     ) -> str
 ```
 
-**Supported Providers**: OpenAI, Anthropic, Local LLM
+**Provider**: Google Gemini Preview API (primary)
 
 **Usage by Agent**:
-- Sales Manager: GPT-4/Claude (strategic decisions)
-- Lead Finder: GPT-3.5 (classification)
-- Outreach: GPT-3.5 (messages, analysis)
+- Sales Manager: Gemini Pro (strategic decisions, report insights)
+- Lead Finder: Gemini Pro (profile analysis, edge case classification)
+- Outreach: Gemini Pro (message generation, sentiment analysis - 10% error rate acceptable)
+
+**Fallback**: Rule-based logic if API unavailable
 
 ---
 
@@ -208,24 +213,29 @@ class StateManager:
 
 ```yaml
 sales_manager:
-  llm_provider: "openai"
-  llm_model: "gpt-4"
+  llm_provider: "google"
+  llm_model: "gemini-pro"
   coordination_time: "09:00"
   report_time: "09:15"
+  include_self_review: true
 
 lead_finder:
-  llm_provider: "openai"
-  llm_model: "gpt-3.5-turbo"
-  search_time: "10:00"
+  llm_provider: "google"
+  llm_model: "gemini-pro"
+  lead_source: "google_sheets"  # CSV import or manual entry
   max_leads_per_day: 100
   quality_threshold: 6.0
+  classification_mode: "rule_based_enhanced"
 
 outreach:
-  llm_provider: "openai"
-  llm_model: "gpt-3.5-turbo"
+  llm_provider: "google"
+  llm_model: "gemini-pro"
   rate_limit_daily: 45
   rate_limit_interval: "5-15 minutes"
+  rate_limit_window: "09:00-17:00"
+  linkedin_accounts: 1  # Single account
   response_check_interval: "2 hours"
+  acceptable_error_rate: 0.10  # 10% for sentiment analysis
 ```
 
 ---
@@ -233,7 +243,7 @@ outreach:
 ## Dependencies
 
 See `requirements.txt`:
-- LLM: `openai`, `anthropic`
+- LLM: `google-generativeai` (Gemini API)
 - Database: `gspread`, `google-auth`
 - Message Queue: `redis`
 - Scheduling: `APScheduler`
@@ -269,11 +279,33 @@ class RateLimitExceededError(OutreachAgentError): pass
 
 ---
 
-## Questions
+## Quality Scoring Algorithm (Simple)
 
-**Q1**: LLM API rate limits and costs management?  
-**Q2**: State management concurrency handling?  
-**Q3**: Agent failure recovery strategy?
+```python
+def calculate_quality_score(lead: Lead) -> float:
+    """
+    Simple quality scoring (1-10 scale).
+    
+    Factors:
+    - Position match: 0-4 (exact match = 4, partial = 2-3)
+    - Company relevance: 0-3 (based on company size/type)
+    - Profile completeness: 0-3 (based on available data)
+    """
+    position_score = calculate_position_match(lead.position)  # 0-4
+    company_score = calculate_company_relevance(lead.company)  # 0-3
+    completeness_score = calculate_completeness(lead)  # 0-3
+    
+    total = position_score + company_score + completeness_score
+    return min(10.0, max(1.0, total))
+```
+
+## Message Templates (Improved Initial Versions)
+
+**Speaker Template**:
+"Hi [Name]! We're organising a tech event on [Date]. Given your experience at [Company] as [Position], we think you'd be perfect as a speaker. Interested in sharing your insights?"
+
+**Sponsor Template**:
+"Hello [Name]! We're hosting a tech event on [Date] and looking for corporate sponsors. [Company] would be a great fit. Would you like to learn more about sponsorship opportunities?"
 
 ---
 

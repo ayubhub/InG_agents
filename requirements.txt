@@ -3,8 +3,7 @@ python-dateutil==2.8.2
 pytz==2024.1
 
 # LLM APIs
-openai==1.3.0
-anthropic==0.7.0
+google-generativeai==0.3.0  # Google Gemini Preview API
 
 # Google Sheets
 gspread==5.12.0

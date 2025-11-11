@@ -11,7 +11,7 @@
 
 ## Executive Summary
 
-Comprehensive test plan for three AI agents: unit, integration, system, and acceptance testing. Focus on agent coordination, LLM integration, and end-to-end workflows.
+Comprehensive test plan for three AI agents: unit, integration, system, and acceptance testing. Focus on agent coordination, **Google Gemini API** integration, and end-to-end workflows. **10% error rate acceptable** for sentiment analysis.
 
 ---
 
@@ -58,7 +58,7 @@ Comprehensive test plan for three AI agents: unit, integration, system, and acce
 **TC-26**: Sales Manager - Lead allocation  
 **TC-28**: Lead Finder - Profile analysis with LLM  
 **TC-30**: Outreach - LLM message generation  
-**TC-31**: Outreach - Response analysis with LLM
+**TC-31**: Outreach - Response analysis with LLM (10% error rate acceptable)
 
 ### Multi-Agent Tests
 
@@ -110,8 +110,9 @@ Comprehensive test plan for three AI agents: unit, integration, system, and acce
 
 ### Prerequisites
 - Python 3.10+, Redis server, Test Google Sheet
-- Test API credentials (Google Sheets, LinkedIn, LLM)
+- Test API credentials (Google Sheets, LinkedIn, **Google Gemini API**)
 - Test SMTP server
+- **Single LinkedIn test account** (no multi-account testing)
 
 ### Setup
 ```bash
@@ -142,15 +143,23 @@ pytest tests/ -v --cov=src --cov-report=html
 ## Questions
 
 **Q1**: LLM testing strategy - how to test non-deterministic responses?  
+**Answer**: Use mock Gemini responses for unit tests, real API for integration. Validate structure and quality, not exact text. **10% error rate acceptable** for sentiment analysis.
+
 **Q2**: Inter-agent communication testing - how to test message queue reliability?  
-**Q3**: State management testing - how to test concurrent updates?
+**Answer**: Use real Redis for integration tests. Test failure scenarios. Monitor message delivery rates (target: 99%+).
+
+**Q3**: State management testing - how to test concurrent updates?  
+**Answer**: Test with multiple concurrent agents. Verify optimistic locking and conflict resolution work correctly.
 
 ---
 
 ## Concerns
 
 **C1**: LLM API costs for testing  
-**C2**: Test environment complexity (multi-agent system)
+**Mitigation**: Google Gemini API is cost-effective. Use mocks for most unit tests, limit real API calls in integration tests.
+
+**C2**: Test environment complexity (multi-agent system)  
+**Mitigation**: Use Docker Compose for test environment. Automate setup. Keep it simple - Google Sheets + Redis.
 
 ---
 
