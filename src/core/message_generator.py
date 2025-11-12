@@ -22,11 +22,40 @@ class MessageGenerator:
         
         # Get event info from config/env
         self.event_date = os.getenv("EVENT_DATE", "2025-11-20")
-        self.event_name = os.getenv("EVENT_NAME", "Tech Event 2025")
+        self.event_name = os.getenv("EVENT_NAME", "Innovators Guild")
         
-        # Base templates
-        self.speaker_template = "Hi [Name]! We're organising a tech event on [Date]. Given your experience at [Company] as [Position], we think you'd be perfect as a speaker. Interested in sharing your insights?"
-        self.sponsor_template = "Hello [Name]! We're hosting a tech event on [Date] and looking for corporate sponsors. [Company] would be a great fit. Would you like to learn more about sponsorship opportunities?"
+        # Base templates (Innovators Guild templates)
+        self.speaker_template = """Hi [Name],
+
+We're hosting an Innovators Guild event on [Date] - a curated gathering of the most ambitious engineers, founders, and innovators building the future.
+
+Your work at [Company] leading [specific area] is exactly the kind of perspective our community needs to hear. I think you'd be a perfect fit.
+
+Interested in speaking?
+
+Best,
+
+Ayub
+
+Innovators Guild
+
+https://innovators.london"""
+        
+        self.sponsor_template = """Hi [Name],
+
+I've been following [Company]'s work in [one thing they're known for] - really impressed!
+
+We run Innovators Guild events that bring together ambitious leaders and emerging companies. I think your team would find real value in being part of it.
+
+Would you be open to a quick chat about sponsoring or collaborating on an event?
+
+Best,
+
+Ayub
+
+Innovators Guild
+
+https://innovators.london"""
     
     def generate(self, lead: Lead) -> str:
         """
@@ -36,7 +65,7 @@ class MessageGenerator:
             lead: Lead object
         
         Returns:
-            Message text (max 300 characters)
+            Message text (Innovators Guild template with signature)
         """
         if self.llm_client:
             return self._generate_with_llm(lead)
@@ -63,14 +92,27 @@ class MessageGenerator:
             template = self.speaker_template
         
         # Replace variables
-        message = template.replace("[Name]", lead.name.split()[0] if lead.name else "there")
-        message = message.replace("[Company]", lead.company or "your company")
-        message = message.replace("[Position]", lead.position or "your role")
-        message = message.replace("[Date]", self.event_date)
+        first_name = lead.name.split()[0] if lead.name else "there"
+        company = lead.company or "your company"
+        position = lead.position or "your role"
+        event_date = self.event_date
         
-        # Ensure max length
-        if len(message) > 300:
-            message = message[:297] + "..."
+        # For Speaker: [specific area] - use position or company focus
+        specific_area = position if position else "innovation"
+        
+        # For Sponsor: [one thing they're known for] - use company or position
+        known_for = company if company else "innovation"
+        
+        message = template.replace("[Name]", first_name)
+        message = message.replace("[Company]", company)
+        message = message.replace("[Position]", position)
+        message = message.replace("[Date]", event_date)
+        message = message.replace("[specific area]", specific_area)
+        message = message.replace("[one thing they're known for]", known_for)
+        
+        # Note: New templates are longer than 300 chars, but they include signature
+        # LinkedIn allows longer messages, so we keep the full template
+        # If needed, can truncate but keep signature
         
         return message
     
@@ -84,38 +126,43 @@ class MessageGenerator:
         Returns:
             Message text
         """
-        system_prompt = """You are a sales assistant writing personalised LinkedIn messages for a tech event. Messages must be:
+        system_prompt = """You are a sales assistant writing personalised LinkedIn messages for Innovators Guild events. Messages must be:
 - Personal and friendly
-- Under 300 characters
-- Include: [Name], [Company], [Position], [Date]
-- Match the lead's classification (Speaker or Sponsor)
 - Professional but conversational
 - Use British English spelling and terminology (e.g., "organising" not "organizing", "colour" not "color")
+- Match the lead's classification (Speaker or Sponsor)
+- Include signature: "Best, Ayub\n\nInnovators Guild\n\nhttps://innovators.london"
+- For Speakers: Mention their work at [Company] leading [specific area]
+- For Sponsors: Mention following [Company]'s work in [one thing they're known for]
 
 Template variables:
-- [Name] - Lead's name
+- [Name] - Lead's first name
 - [Company] - Lead's company
 - [Position] - Lead's position
 - [Date] - Event date (from config)
+- [specific area] - For Speakers: their area of expertise/position
+- [one thing they're known for] - For Sponsors: what company is known for
 
 Respond with ONLY the message text. No explanations."""
         
-        user_prompt = f"""Generate a LinkedIn message for:
+        user_prompt = f"""Generate a LinkedIn message for Innovators Guild event:
 Name: {lead.name}
 Position: {lead.position}
 Company: {lead.company}
 Classification: {lead.classification or 'Speaker'}
 Event Date: {self.event_date}
 
-Message (max 300 characters):"""
+Generate a personalized message following the Innovators Guild template style. Include the signature at the end."""
         
         try:
-            response = self.llm_client.generate(user_prompt, system_prompt, temperature=0.7, max_tokens=100)
+            response = self.llm_client.generate(user_prompt, system_prompt, temperature=0.7, max_tokens=200)
             message = response.strip()
             
-            # Ensure max length
-            if len(message) > 300:
-                message = message[:297] + "..."
+            # LinkedIn allows longer messages, but keep reasonable length
+            # Full template with signature is ~400-500 chars, which is acceptable
+            if len(message) > 1000:
+                self.logger.warning(f"Generated message too long ({len(message)} chars), truncating")
+                message = message[:997] + "..."
             
             return message
         except Exception as e:

@@ -96,7 +96,7 @@ AI-powered sales department with three specialised agents: **Sales Manager Agent
 - **Single LinkedIn account** (no multi-account strategy)
 
 **Key Rules**:
-- Max 300 characters
+- Messages follow Innovators Guild template format (includes signature)
 - Working hours: 9:00-17:00
 
 **Improved Message Templates** (initial versions):
