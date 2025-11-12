@@ -90,6 +90,7 @@ class MessageGenerator:
 - Include: [Name], [Company], [Position], [Date]
 - Match the lead's classification (Speaker or Sponsor)
 - Professional but conversational
+- Use British English spelling and terminology (e.g., "organising" not "organizing", "colour" not "color")
 
 Template variables:
 - [Name] - Lead's name
