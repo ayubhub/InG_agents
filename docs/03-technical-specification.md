@@ -325,13 +325,53 @@ def calculate_quality_score(lead: Lead) -> float:
     return min(10.0, max(1.0, total))
 ```
 
-## Message Templates (Improved Initial Versions)
+## Message Templates (Innovators Guild Templates)
 
 **Speaker Template**:
-"Hi [Name]! We're organising a tech event on [Date]. Given your experience at [Company] as [Position], we think you'd be perfect as a speaker. Interested in sharing your insights?"
+```
+Hi [Name],
+
+We're hosting an Innovators Guild event on [Date] - a curated gathering of the most ambitious engineers, founders, and innovators building the future.
+
+Your work at [Company] leading [specific area] is exactly the kind of perspective our community needs to hear. I think you'd be a perfect fit.
+
+Interested in speaking?
+
+Best,
+
+Ayub
+
+Innovators Guild
+
+https://innovators.london
+```
 
 **Sponsor Template**:
-"Hello [Name]! We're hosting a tech event on [Date] and looking for corporate sponsors. [Company] would be a great fit. Would you like to learn more about sponsorship opportunities?"
+```
+Hi [Name],
+
+I've been following [Company]'s work in [one thing they're known for] - really impressed!
+
+We run Innovators Guild events that bring together ambitious leaders and emerging companies. I think your team would find real value in being part of it.
+
+Would you be open to a quick chat about sponsoring or collaborating on an event?
+
+Best,
+
+Ayub
+
+Innovators Guild
+
+https://innovators.london
+```
+
+**Template Variables**:
+- `[Name]` - Lead's first name
+- `[Company]` - Lead's company name
+- `[Position]` - Lead's position/title
+- `[Date]` - Event date
+- `[specific area]` - For Speakers: their area of expertise (derived from position)
+- `[one thing they're known for]` - For Sponsors: what company is known for (derived from company/position)
 
 ---
 

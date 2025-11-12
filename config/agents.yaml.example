@@ -31,7 +31,7 @@ outreach:
   linkedin_accounts: 1  # Single account
   response_check_interval: "2 hours"  # How often to check for responses
   acceptable_error_rate: 0.10  # 10% for sentiment analysis
-  message_max_length: 300  # Max characters per message
+  message_max_length: 1000  # Max characters per message (Innovators Guild templates are ~400-500 chars)
   
 # Storage Configuration
 storage:
