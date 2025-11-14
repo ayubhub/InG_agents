@@ -44,6 +44,7 @@ All project documentation is located in the `docs/` directory (condensed version
 - **09-llm-prompts.md**: LLM prompt templates for each agent
 - **10-api-integrations.md**: External API integration details (Gemini, Sheets, LinkedIn, SMTP)
 - **11-daily-report-format.md**: Daily report format and examples
+- **13-setup-guide.md**: Step-by-step account setup instructions for testing
 
 ## Quick Start
 

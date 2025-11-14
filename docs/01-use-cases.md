@@ -46,7 +46,8 @@ AI-powered sales department with three specialised agents: **Sales Manager Agent
 **Note**: Lead Finder **does not search LinkedIn**. Leads are already in Google Sheets (imported from Clay.com, LinkedIn Sales Navigator, Apollo.io, or manual entry). Agent processes existing leads.
 
 **Lead Sources** (imported to Google Sheets):
-- **Clay.com**: Export to CSV, import to Google Sheets (current source)
+- **Clay.com**: Export to CSV, import to Google Sheets (current source, Sprint 1)
+  - **Future**: Automatic API synchronization (see Future Enhancements)
 - **Google Sheets**: Manual entry or CSV import (simplest, recommended for Sprint 1)
 - **LinkedIn Sales Navigator**: Export to CSV, import to Google Sheets
 - **Apollo.io**: Export contacts to CSV
@@ -208,7 +209,8 @@ https://innovators.london"
 - **Answer**: Agents don't escalate, only report. Daily report includes "Agent Self-Review" section with uncertain decisions flagged for human validation
 
 **Q4**: Multi-account strategy
-- **Answer**: Single LinkedIn account only
+- **Answer**: Single LinkedIn account only (for Sprint 1)
+- **Future Enhancement**: Multi-account support with priority-based routing (see Future Enhancements section)
 
 **Q5**: LLM response analysis accuracy
 - **Answer**: 10% error rate acceptable (false positive/negative)
@@ -249,6 +251,61 @@ https://innovators.london"
 
 **I2-I8**: Not for this stage
 - **Status**: Deferred to future sprints
+
+---
+
+## Future Enhancements (Post-Sprint 1)
+
+### FE-01: Clay.com API Integration
+
+**Current State**: Clay.com leads are exported to CSV and manually imported to Google Sheets.
+
+**Future Enhancement**: Automatic synchronization from Clay.com API to Google Sheets.
+
+**Approach**:
+- Lead Finder Agent continues to read from Google Sheets (no change to agent logic)
+- Separate synchronization process/script automatically syncs Clay.com → Google Sheets
+- Optional: Direct Clay.com API integration in Lead Finder Agent (alternative approach)
+
+**Benefits**: 
+- Eliminates manual CSV export/import step
+- Real-time lead updates
+- Reduced human intervention
+
+**Status**: Optional enhancement, not required for Sprint 1
+
+---
+
+### FE-02: Multi-Account LinkedIn Strategy
+
+**Current State**: Single LinkedIn account with 30-50 messages/day limit.
+
+**Future Enhancement**: Support for multiple LinkedIn accounts with priority-based routing.
+
+**Strategy**:
+- **Priority Account + Reserve Accounts**: Primary account used first, switches to reserve accounts when daily limit reached
+- **Independent Rate Limits**: Each account has its own rate limiter (e.g., 45 messages/day per account)
+- **Account Configuration**: Each account has its own API key and account_id
+  - Account 1 (Primary): `DRIPIFY_API_KEY_1`, `DRIPIFY_ACCOUNT_ID_1`
+  - Account 2 (Reserve): `DRIPIFY_API_KEY_2`, `DRIPIFY_ACCOUNT_ID_2`
+  - Account 3 (Reserve): `DRIPIFY_API_KEY_3`, `DRIPIFY_ACCOUNT_ID_3`
+  - Account 4 (Reserve): `DRIPIFY_API_KEY_4`, `DRIPIFY_ACCOUNT_ID_4`
+
+**Implementation Details**:
+- Outreach Agent maintains account priority list
+- When primary account reaches daily limit, automatically switches to next available account
+- Each account tracks its own daily message count independently
+- Total capacity: 4 accounts × 45 messages = 180 messages/day (if all accounts used)
+
+**Configuration Example** (future):
+```yaml
+outreach:
+  linkedin_accounts: 4
+  account_priority: ["account_1", "account_2", "account_3", "account_4"]
+  rate_limit_daily_per_account: 45
+```
+
+**Status**: Planned for implementation after successful Sprint 1 testing
 
 ---
 

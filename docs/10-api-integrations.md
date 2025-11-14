@@ -426,6 +426,29 @@ def mock_linkedin_send(linkedin_url: str, message: str) -> SendResult:
 
 ---
 
+## Future API Integrations (Post-Sprint 1)
+
+### Clay.com API Integration
+
+**Current State**: CSV export/import method (Sprint 1).
+
+**Future Enhancement**: Automatic synchronization from Clay.com API to Google Sheets.
+
+**Approach**:
+- Separate synchronization script/process (not part of agent system)
+- Syncs Clay.com API → Google Sheets on schedule
+- Lead Finder Agent continues reading from Google Sheets (no agent changes)
+
+**API Details** (to be specified when implemented):
+- Authentication: API key or OAuth
+- Endpoints: Lead export, lead updates
+- Rate limits: To be determined
+- Error handling: Retry with exponential backoff
+
+**Status**: Optional enhancement, not required for Sprint 1.
+
+---
+
 ## Document Approval
 
 - **Technical Lead**: _________________ Date: _______

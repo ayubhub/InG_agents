@@ -6,7 +6,7 @@ sales_manager:
   llm_provider: "google"
   llm_model: "gemini-pro"
   coordination_time: "09:00"  # Daily coordination start time
-  report_time: "09:15"  # Daily report generation time
+  report_time: "09:15"  # Daily report generation time (covers previous day 00:00-23:59)
   include_self_review: true  # Flag uncertain decisions for human review
   report_recipients:
     - "reports@yourcompany.com"
@@ -80,4 +80,11 @@ event:
   name: "${EVENT_NAME}"
   date: "${EVENT_DATE}"
   description: "Tech event for industry professionals"
+
+# Future: Multi-Account LinkedIn Configuration (Post-Sprint 1)
+# Uncomment when implementing multi-account support
+# outreach:
+#   linkedin_accounts: 4
+#   account_priority: ["account_1", "account_2", "account_3", "account_4"]
+#   rate_limit_daily_per_account: 45
 

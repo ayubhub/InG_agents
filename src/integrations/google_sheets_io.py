@@ -139,9 +139,23 @@ class GoogleSheetsIO:
             if not dt_str:
                 return None
             try:
-                return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-            except:
-                return None
+                # Try ISO format first (with Z timezone)
+                if 'Z' in dt_str:
+                    return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                # Try standard ISO format
+                return datetime.fromisoformat(dt_str)
+            except (ValueError, AttributeError):
+                # Try alternative formats (Google Sheets might return different formats)
+                try:
+                    # Format: "2025-01-15 10:30:00"
+                    return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    try:
+                        # Format: "2025-01-15T10:30:00"
+                        return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
+                    except ValueError:
+                        self.logger.warning(f"Could not parse datetime: {dt_str}")
+                        return None
         
         return Lead(
             id=record.get("Lead ID", ""),

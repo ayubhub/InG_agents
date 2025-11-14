@@ -233,7 +233,7 @@ sales_manager:
   llm_provider: "google"
   llm_model: "gemini-pro"
   coordination_time: "09:00"
-  report_time: "09:15"
+  report_time: "09:15"  # Report covers previous day (00:00-23:59)
   include_self_review: true
 
 lead_finder:
@@ -372,6 +372,46 @@ https://innovators.london
 - `[Date]` - Event date
 - `[specific area]` - For Speakers: their area of expertise (derived from position)
 - `[one thing they're known for]` - For Sponsors: what company is known for (derived from company/position)
+
+---
+
+## Future Enhancements (Post-Sprint 1)
+
+### FE-01: Clay.com API Integration
+
+**Current State**: CSV export/import method (Sprint 1).
+
+**Future Enhancement**: Automatic Clay.com API → Google Sheets synchronization.
+
+**Implementation**:
+- Separate sync script/process (not part of agent codebase)
+- Lead Finder Agent continues reading from Google Sheets (no changes)
+- Optional: Direct API integration in Lead Finder Agent
+
+**Status**: Optional, not required for Sprint 1.
+
+---
+
+### FE-02: Multi-Account LinkedIn Support
+
+**Current State**: Single LinkedIn account (`linkedin_accounts: 1`).
+
+**Future Enhancement**: Multiple accounts with priority-based routing.
+
+**Configuration** (future):
+```yaml
+outreach:
+  linkedin_accounts: 4
+  account_priority: ["account_1", "account_2", "account_3", "account_4"]
+  rate_limit_daily_per_account: 45
+```
+
+**Implementation**:
+- Rate limiter tracks count per account independently
+- Outreach Agent switches to next account when primary reaches limit
+- Each account requires separate API key and account_id
+
+**Status**: Planned after Sprint 1 testing.
 
 ---
 

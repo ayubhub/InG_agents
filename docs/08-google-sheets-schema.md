@@ -179,11 +179,30 @@ leads_sheet.update('G2', 'Speaker')  # Update Classification in row 2
 
 ## Data Import from Clay.com
 
+### Current Method (Sprint 1)
+
 1. Export leads from Clay.com to CSV
 2. CSV columns should map to: Name, Position, Company, LinkedIn URL
 3. Import CSV to Google Sheets (File → Import)
 4. Add remaining columns (Lead ID, Contact Status, Created At, etc.)
 5. Lead Finder Agent will process and fill Classification, Quality Score
+
+### Future: Clay.com API Integration (Post-Sprint 1)
+
+**Note**: This is an optional future enhancement. Current CSV export/import method works for Sprint 1.
+
+**Approach**:
+- Separate synchronization script/process automatically syncs Clay.com API → Google Sheets
+- Lead Finder Agent continues to read from Google Sheets (no agent changes needed)
+- Synchronization runs on schedule (e.g., hourly or daily)
+- Eliminates manual CSV export/import step
+
+**Benefits**:
+- Real-time lead updates
+- Reduced manual work
+- Automatic synchronization
+
+**Status**: Optional enhancement, not required for Sprint 1. See `docs/01-use-cases.md` for details.
 
 ---
 

@@ -11,7 +11,7 @@
 
 ## Executive Summary
 
-Exact format and structure of daily email reports sent at 9:15 AM. Includes metrics, Agent Self-Review section, and recommendations.
+Exact format and structure of daily email reports sent at 9:15 AM. **Report covers the previous day (00:00-23:59)**. Includes metrics, Agent Self-Review section, and recommendations.
 
 ---
 
@@ -320,6 +320,8 @@ def format_self_review(self_review: List[Dict]) -> str:
 **Recipients**: From configuration (`SMTP_TO` or `agents.yaml`)
 
 **Sending Time**: 9:15 AM daily (via Sales Manager Agent)
+
+**Report Period**: The report covers the **previous day** (00:00:00 - 23:59:59). For example, a report sent on January 15 at 9:15 AM covers January 14.
 
 ---
 

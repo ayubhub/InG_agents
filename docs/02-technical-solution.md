@@ -420,6 +420,65 @@ data/
 
 ---
 
+## Future Enhancements (Post-Sprint 1)
+
+### FE-01: Clay.com API Integration
+
+**Current State**: Clay.com leads exported to CSV, manually imported to Google Sheets.
+
+**Future Enhancement**: Automatic synchronization from Clay.com API to Google Sheets.
+
+**Architecture**:
+- Separate synchronization process/script (not part of agent system)
+- Syncs Clay.com API → Google Sheets on schedule (hourly/daily)
+- Lead Finder Agent continues reading from Google Sheets (no changes needed)
+- Optional: Direct API integration in Lead Finder Agent (alternative approach)
+
+**Status**: Optional enhancement, not required for Sprint 1.
+
+---
+
+### FE-02: Multi-Account LinkedIn Strategy
+
+**Current State**: Single LinkedIn account with 30-50 messages/day limit.
+
+**Future Enhancement**: Support for multiple LinkedIn accounts with priority-based routing.
+
+**Architecture**:
+- **Priority-based routing**: Primary account used first, switches to reserve accounts when limit reached
+- **Independent rate limiters**: Each account has its own rate limiter (45 messages/day per account)
+- **Account configuration**: Each account has separate API key and account_id
+- **Total capacity**: 4 accounts × 45 messages = 180 messages/day (if all used)
+
+**Implementation**:
+- Outreach Agent maintains account priority list
+- Rate limiter tracks daily count per account independently
+- Automatic failover when primary account reaches limit
+- Configuration supports multiple accounts with individual settings
+
+**Configuration Example** (future):
+```yaml
+outreach:
+  linkedin_accounts: 4
+  account_priority: ["account_1", "account_2", "account_3", "account_4"]
+  rate_limit_daily_per_account: 45
+```
+
+**Environment Variables** (future):
+```bash
+# Account 1 (Primary)
+DRIPIFY_API_KEY_1=...
+DRIPIFY_ACCOUNT_ID_1=...
+
+# Account 2 (Reserve)
+DRIPIFY_API_KEY_2=...
+DRIPIFY_ACCOUNT_ID_2=...
+```
+
+**Status**: Planned for implementation after successful Sprint 1 testing.
+
+---
+
 ## Document Approval
 
 - **Solution Architect**: _________________ Date: _______

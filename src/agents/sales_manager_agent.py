@@ -3,7 +3,7 @@ Sales Manager Agent - Coordinates operations and generates reports.
 """
 
 import time
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta, date
 from typing import Dict, List
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -61,8 +61,8 @@ class SalesManagerAgent(BaseAgent):
             allocated = self.allocate_leads(max_leads=50)
             self.logger.info(f"Allocated {len(allocated)} leads to Outreach")
             
-            # Monitor performance
-            metrics = self.monitor_performance()
+            # Monitor performance for current state (not previous day)
+            metrics = self.monitor_performance(report_period="all_time")
             self.logger.info(f"Performance metrics: {metrics}")
             
         except Exception as e:
@@ -106,9 +106,13 @@ class SalesManagerAgent(BaseAgent):
         
         return selected
     
-    def monitor_performance(self) -> Dict:
+    def monitor_performance(self, report_period: str = "previous_day") -> Dict:
         """
         Monitor performance metrics.
+        
+        Args:
+            report_period: "previous_day" (default) or "all_time"
+                          If "previous_day", filters metrics for previous day (00:00-23:59)
         
         Returns:
             Performance metrics dictionary
@@ -116,11 +120,37 @@ class SalesManagerAgent(BaseAgent):
         # Get all leads
         all_leads = self.state_manager.read_leads()
         
+        # Filter by period if needed
+        if report_period == "previous_day":
+            # Calculate previous day boundaries
+            today = date.today()
+            previous_day = today - timedelta(days=1)
+            day_start = datetime.combine(previous_day, dt_time.min)  # 00:00:00
+            day_end = datetime.combine(previous_day, dt_time.max)  # 23:59:59
+            
+            # Filter leads by activity within previous day
+            # Include leads that had any activity yesterday (message sent, response received, or allocated)
+            filtered_leads = []
+            for lead in all_leads:
+                # Include if message was sent yesterday
+                if lead.message_sent_at and day_start <= lead.message_sent_at <= day_end:
+                    filtered_leads.append(lead)
+                # Include if response was received yesterday
+                elif lead.response_received_at and day_start <= lead.response_received_at <= day_end:
+                    filtered_leads.append(lead)
+                # Include if allocated yesterday (for leads processed count)
+                elif lead.allocated_at and day_start <= lead.allocated_at <= day_end:
+                    filtered_leads.append(lead)
+            
+            all_leads = filtered_leads
+        
         # Calculate metrics
         total_leads = len(all_leads)
         messages_sent = len([l for l in all_leads if l.message_sent])
         responses_received = len([l for l in all_leads if l.response])
         positive_responses = len([l for l in all_leads if l.response_sentiment == "positive"])
+        negative_responses = len([l for l in all_leads if l.response_sentiment == "negative"])
+        neutral_responses = len([l for l in all_leads if l.response_sentiment == "neutral"])
         
         response_rate = (responses_received / messages_sent * 100) if messages_sent > 0 else 0
         
@@ -129,16 +159,18 @@ class SalesManagerAgent(BaseAgent):
             "messages_sent": messages_sent,
             "responses_received": responses_received,
             "positive_responses": positive_responses,
+            "negative_responses": negative_responses,
+            "neutral_responses": neutral_responses,
             "response_rate": round(response_rate, 2)
         }
     
     def generate_daily_report(self) -> None:
-        """Generate and send daily report."""
-        self.logger.info("Generating daily report")
+        """Generate and send daily report for previous day."""
+        self.logger.info("Generating daily report for previous day")
         
         try:
-            # Collect metrics
-            metrics = self.monitor_performance()
+            # Collect metrics for previous day
+            metrics = self.monitor_performance(report_period="previous_day")
             
             # Get self-review data
             self_review = self._collect_self_review()
@@ -149,11 +181,12 @@ class SalesManagerAgent(BaseAgent):
             # Format report
             report = self._format_report(metrics, self_review, insights)
             
-            # Send email
-            subject = f"InG Sales Department - Daily Report - {datetime.now().strftime('%Y-%m-%d')}"
+            # Send email (report date is previous day)
+            previous_day = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+            subject = f"InG Sales Department - Daily Report - {previous_day}"
             self.email_service.send_daily_report(subject, report)
             
-            self.logger.info("Daily report sent")
+            self.logger.info(f"Daily report sent for {previous_day}")
             
         except Exception as e:
             self.logger.error(f"Error generating daily report: {e}")
@@ -194,23 +227,26 @@ Insights and recommendations:"""
             return "Performance metrics collected. Review recommended."
     
     def _format_report(self, metrics: Dict, self_review: List[Dict], insights: str) -> str:
-        """Format daily report."""
-        date_str = datetime.now().strftime('%Y-%m-%d')
+        """Format daily report for previous day."""
+        # Report date is previous day
+        previous_day = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
         
         report = f"""
 InG AI Sales Department - Daily Report
-Date: {date_str}
+Date: {previous_day} (Previous Day)
 Time: 9:15 AM
 
 ═══════════════════════════════════════════════════════════
-📊 PERFORMANCE METRICS
+📊 PERFORMANCE METRICS (Previous Day: {previous_day})
 ═══════════════════════════════════════════════════════════
 
-✅ Leads Processed Today: {metrics.get('total_leads', 0)}
+✅ Leads Processed: {metrics.get('total_leads', 0)}
 📤 Messages Sent: {metrics.get('messages_sent', 0)}
 📥 Responses Received: {metrics.get('responses_received', 0)}
 📈 Response Rate: {metrics.get('response_rate', 0)}%
 👍 Positive Responses: {metrics.get('positive_responses', 0)}
+👎 Negative Responses: {metrics.get('negative_responses', 0)}
+❓ Neutral Responses: {metrics.get('neutral_responses', 0)}
 
 ═══════════════════════════════════════════════════════════
 🤖 AGENT SELF-REVIEW
