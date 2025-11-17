@@ -22,7 +22,7 @@ Minimum required accounts for testing:
 - [ ] Google Gemini API key
 - [ ] Google Sheets API credentials (Service Account JSON)
 - [ ] Google Spreadsheet created and shared with Service Account
-- [ ] LinkedIn automation service account (Dripify or Gojiberry)
+- [ ] LinkedIn automation service account (**Gojiberry recommended** - Dripify does NOT support API for sending messages)
 - [ ] SMTP email credentials (for daily reports)
 
 **Estimated Setup Time**: 30-60 minutes
@@ -50,7 +50,7 @@ GEMINI_API_KEY=your_actual_api_key_here
 
 ```bash
 # Test API key (optional)
-python -c "import google.generativeai as genai; genai.configure(api_key='YOUR_KEY'); print('OK')"
+python3 -c "import google.generativeai as genai; genai.configure(api_key='YOUR_KEY'); print('OK')"
 ```
 
 ### Notes
@@ -147,13 +147,27 @@ GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id_here
 
 ```python
 # Test Google Sheets access (optional)
+import os
+from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 
-creds = Credentials.from_service_account_file('config/google-credentials.json', 
+# Load environment variables from .env
+load_dotenv()
+
+# Get credentials path and spreadsheet ID from .env
+creds_path = os.getenv('GOOGLE_SHEETS_CREDENTIALS_PATH', 'config/google-credentials.json')
+spreadsheet_id = os.getenv('GOOGLE_SHEETS_SPREADSHEET_ID')
+
+if not spreadsheet_id:
+    print("ERROR: GOOGLE_SHEETS_SPREADSHEET_ID not set in .env")
+    exit(1)
+
+# Authenticate
+creds = Credentials.from_service_account_file(creds_path, 
                                               scopes=['https://www.googleapis.com/auth/spreadsheets'])
 client = gspread.authorize(creds)
-spreadsheet = client.open_by_key('YOUR_SPREADSHEET_ID')
+spreadsheet = client.open_by_key(spreadsheet_id)
 print(f"Access OK: {spreadsheet.title}")
 ```
 
@@ -161,39 +175,44 @@ print(f"Access OK: {spreadsheet.title}")
 
 ## 3. LinkedIn Automation Service
 
-Choose one: **Dripify** or **Gojiberry**
+⚠️ **Important**: Choose a service that provides **REST API for sending messages**. 
 
-### Option A: Dripify
+**Recommended**: **Gojiberry** (see Option B below)
 
-#### Where to Get
+**Not Recommended**: **Dripify** - does NOT support API for sending messages (only webhooks for receiving data)
 
+### ⚠️ Important: Dripify API Limitation
+
+**Dripify does NOT provide traditional REST API for sending messages.**
+
+According to Dripify support, they use **webhook integrations** (via Zapier/Make) that work **one-way only** (from Dripify to external tools, not the other way around). This means:
+
+- ❌ **Cannot send messages** via API to Dripify
+- ✅ Can only **receive data** from Dripify via webhooks
+- ⚠️ **Dripify is NOT compatible** with this application's requirements
+
+**Recommendation**: Use **Gojiberry** (Option B) or find an alternative LinkedIn automation service that provides REST API for sending messages.
+
+### Option A: Dripify (⚠️ Not Recommended - API Not Available)
+
+**Status**: Dripify does not support API-based message sending. They only provide webhook integrations for receiving data.
+
+If you still want to explore Dripify:
 1. Visit: https://dripify.io
 2. Sign up for an account
-3. Go to API/Settings section
-4. Generate API key
-5. Get Account ID (usually in dashboard or API settings)
+3. Check if they have any API documentation (currently they only support webhooks via Zapier/Make)
 
-#### Where to Configure
+**Note**: This application requires the ability to **send messages via API**, which Dripify does not support. Consider using Gojiberry instead.
 
-**File**: `.env`
-
-```bash
-LINKEDIN_SERVICE=dripify
-DRIPIFY_API_KEY=your_dripify_api_key_here
-DRIPIFY_API_URL=https://api.dripify.io/v1
-DRIPIFY_ACCOUNT_ID=your_account_id_here
-```
-
-**Note**: Verify the actual API URL in Dripify documentation.
-
-### Option B: Gojiberry
+### Option B: Gojiberry (✅ Recommended)
 
 #### Where to Get
 
 1. Visit: https://gojiberry.com
 2. Sign up for an account
-3. Go to API/Settings section
+3. Go to API/Settings section (or Dashboard → API/Integrations)
 4. Generate API key
+5. Verify that Gojiberry provides REST API for sending LinkedIn messages
 
 #### Where to Configure
 
@@ -205,7 +224,23 @@ GOJIBERRY_API_KEY=your_gojiberry_api_key_here
 GOJIBERRY_API_URL=https://api.gojiberry.com/v1
 ```
 
-**Note**: Verify the actual API URL in Gojiberry documentation.
+**Note**: 
+- Verify the actual API URL and endpoints in Gojiberry documentation
+- Ensure Gojiberry supports **sending messages via API** (not just webhooks)
+- If Gojiberry also doesn't support API, you'll need to find an alternative service
+
+#### Alternative Services
+
+If neither Dripify nor Gojiberry provide API access, consider these alternatives:
+
+- **Phantombuster** (https://phantombuster.com) - Provides LinkedIn API
+- **LinkedIn Sales Navigator API** (official, but requires approval)
+- **Other LinkedIn automation tools** that provide REST API for message sending
+
+**Important**: Before choosing a service, verify that it provides:
+- ✅ REST API for **sending** LinkedIn messages
+- ✅ API authentication (API key or OAuth)
+- ✅ Ability to send messages to specific LinkedIn profile URLs
 
 ### Verification
 
@@ -323,10 +358,15 @@ GOOGLE_SHEETS_CREDENTIALS_PATH=config/google-credentials.json
 GOOGLE_SHEETS_SPREADSHEET_ID=1a2b3c4d5e6f7g8h9i0j
 
 # LinkedIn Automation Service
-LINKEDIN_SERVICE=dripify
-DRIPIFY_API_KEY=your_dripify_api_key_here
-DRIPIFY_API_URL=https://api.dripify.io/v1
-DRIPIFY_ACCOUNT_ID=your_account_id_here
+# Note: Dripify does NOT support API for sending messages - use Gojiberry instead
+LINKEDIN_SERVICE=gojiberry
+GOJIBERRY_API_KEY=your_gojiberry_api_key_here
+GOJIBERRY_API_URL=https://api.gojiberry.com/v1
+# OR if using Dripify (not recommended - API not available):
+# LINKEDIN_SERVICE=dripify
+# DRIPIFY_API_KEY=your_dripify_api_key_here
+# DRIPIFY_API_URL=https://api.dripify.io/v1
+# DRIPIFY_ACCOUNT_ID=your_account_id_here
 
 # SMTP Configuration
 SMTP_HOST=smtp.gmail.com
@@ -419,6 +459,14 @@ Check logs for any configuration errors.
 - Check `LINKEDIN_SERVICE` matches chosen service (`dripify` or `gojiberry`)
 - Verify corresponding API key variable is set (`DRIPIFY_API_KEY` or `GOJIBERRY_API_KEY`)
 - For Dripify: Ensure `DRIPIFY_ACCOUNT_ID` is also set
+- **Note**: Dripify does not support API for sending messages - use Gojiberry or alternative service
+
+### Issue: "Dripify API not available for sending messages"
+
+**Solution**:
+- Dripify only supports webhook integrations (one-way, from Dripify to external tools)
+- Switch to `LINKEDIN_SERVICE=gojiberry` or use an alternative service that provides REST API
+- Update `.env` file to use Gojiberry or another compatible service
 
 ---
 

@@ -3,13 +3,13 @@ python-dateutil==2.8.2
 pytz==2024.1
 
 # LLM APIs
-google-generativeai==0.3.0  # Google Gemini Preview API
+google-generativeai==0.8.5  # Google Gemini API
 
 # Google Sheets
 gspread==5.12.0
 google-auth==2.23.4
 google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
+google-auth-httplib2==0.2.1
 
 # Local Storage (no external servers)
 # SQLite is built-in Python, no package needed

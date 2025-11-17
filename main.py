@@ -30,58 +30,48 @@ class AgentOrchestrator:
         
     def start_all_agents(self):
         """Start all three agents in separate processes"""
-        # Initialize shared components
-        state_manager = StateManager(self.config)
-        message_queue = MessageQueue(self.config)
-        llm_client = LLMClient(self.config)
-        
-        # Create agents
-        sales_manager = SalesManagerAgent(
-            agent_name="SalesManager",
-            config=self.config,
-            state_manager=state_manager,
-            message_queue=message_queue,
-            llm_client=llm_client
-        )
-        
-        lead_finder = LeadFinderAgent(
-            agent_name="LeadFinder",
-            config=self.config,
-            state_manager=state_manager,
-            message_queue=message_queue,
-            llm_client=llm_client
-        )
-        
-        outreach = OutreachAgent(
-            agent_name="Outreach",
-            config=self.config,
-            state_manager=state_manager,
-            message_queue=message_queue,
-            llm_client=llm_client
-        )
-        
         # Start agents in separate processes
-        agents = [
-            (sales_manager, "SalesManager"),
-            (lead_finder, "LeadFinder"),
-            (outreach, "Outreach")
+        # Agents are created inside each process to avoid scheduler serialization issues
+        # Pass config as dict to avoid serialization issues
+        import copy
+        config_dict = copy.deepcopy(self.config)
+        
+        agent_configs = [
+            ("SalesManager", SalesManagerAgent),
+            ("LeadFinder", LeadFinderAgent),
+            ("Outreach", OutreachAgent)
         ]
         
-        for agent, name in agents:
-            process = Process(target=self._run_agent, args=(agent, name))
+        for name, agent_class in agent_configs:
+            process = Process(target=self._run_agent, args=(name, agent_class, config_dict))
             process.start()
             self.processes.append(process)
             self.logger.info(f"Started {name} agent (PID: {process.pid})")
-        
-        self.agents = [sales_manager, lead_finder, outreach]
     
-    def _run_agent(self, agent, name):
-        """Run agent in separate process"""
+    def _run_agent(self, agent_name, agent_class, config_dict):
+        """Run agent in separate process - create agent inside process to avoid serialization issues"""
         try:
+            # Initialize shared components inside the process
+            state_manager = StateManager(config_dict)
+            message_queue = MessageQueue(config_dict)
+            llm_client = LLMClient(config_dict)
+            
+            # Create agent inside the process
+            agent = agent_class(
+                agent_name=agent_name,
+                config=config_dict,
+                state_manager=state_manager,
+                message_queue=message_queue,
+                llm_client=llm_client
+            )
+            
             agent.start()
             agent.run()  # Blocking call - agent runs until stopped
         except Exception as e:
-            self.logger.error(f"{name} agent error: {e}")
+            import traceback
+            error_msg = f"{agent_name} agent error: {e}\n{traceback.format_exc()}"
+            # Use print since logger might not work in subprocess
+            print(f"ERROR: {error_msg}")
             raise
     
     def stop_all_agents(self):

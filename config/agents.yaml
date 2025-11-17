@@ -1,0 +1,90 @@
+# InG AI Sales Department - Agent Configuration
+# Copy this file to agents.yaml and adjust as needed
+
+# Sales Manager Agent Configuration
+sales_manager:
+  llm_provider: "google"
+  llm_model: "gemini-2.5-flash-preview-09-2025"
+  coordination_time: "01:01"  # Daily coordination start time (TEST: set to 3 min from now)
+  report_time: "01:03"  # Daily report generation time (TEST: set to 5 min from now)
+  include_self_review: true  # Flag uncertain decisions for human review
+  report_recipients:
+    - "reports@yourcompany.com"
+  
+# Lead Finder Agent Configuration
+lead_finder:
+  llm_provider: "google"
+  llm_model: "gemini-2.5-flash-preview-09-2025"
+  lead_source: "google_sheets"  # CSV import or manual entry
+  max_leads_per_day: 100
+  quality_threshold: 6.0  # Minimum quality score to process
+  classification_mode: "rule_based_enhanced"  # Rules + LLM for edge cases
+  processing_time: "01:02"  # When to process new leads (TEST: set to 4 min from now)
+  
+# Outreach Agent Configuration
+outreach:
+  llm_provider: "google"
+  llm_model: "gemini-2.5-flash-preview-09-2025"
+  rate_limit_daily: 45  # Max messages per day
+  rate_limit_interval: "5-15 minutes"  # Random interval between sends
+  rate_limit_window: "00:58-17:00"  # Working hours (TEST: starts immediately)
+  linkedin_accounts: 1  # Single account
+  response_check_interval: "2 hours"  # How often to check for responses
+  acceptable_error_rate: 0.10  # 10% for sentiment analysis
+  message_max_length: 1000  # Max characters per message (Innovators Guild templates are ~400-500 chars)
+  
+# Storage Configuration
+storage:
+  data_directory: "data"  # Local data directory
+  sqlite_db: "data/state/agents.db"
+  queue_directory: "data/queue"
+  cache_directory: "data/cache"
+  events_directory: "data/events"
+  
+# LLM Configuration
+llm:
+  provider: "google"
+  model: "gemini-2.5-flash-preview-09-2025"
+  temperature: 0.7
+  max_tokens: 500
+  context_max_tokens: 200000  # 200K tokens for context injection
+  cache_enabled: true
+  cache_directory: "data/cache/llm_responses"
+  
+# Google Sheets Configuration
+google_sheets:
+  spreadsheet_id: "${GOOGLE_SHEETS_SPREADSHEET_ID}"  # From .env
+  leads_sheet_name: "Leads"
+  context_sheet_name: "Agent Context"  # Optional
+  credentials_path: "${GOOGLE_SHEETS_CREDENTIALS_PATH}"  # From .env
+  
+# LinkedIn Service Configuration
+linkedin:
+  service: "${LINKEDIN_SERVICE}"  # "dripify" or "gojiberry"
+  api_key: "${DRIPIFY_API_KEY}"  # or GOJIBERRY_API_KEY
+  api_url: "${DRIPIFY_API_URL}"  # or GOJIBERRY_API_URL
+  account_id: "your_account_id"  # LinkedIn account identifier
+  
+# Email Configuration
+email:
+  smtp_host: "${SMTP_HOST}"
+  smtp_port: "${SMTP_PORT}"
+  smtp_user: "${SMTP_USER}"
+  smtp_password: "${SMTP_PASSWORD}"
+  from_address: "${SMTP_FROM}"
+  to_addresses:
+    - "${SMTP_TO}"
+  
+# Event Information (for message templates)
+event:
+  name: "${EVENT_NAME}"
+  date: "${EVENT_DATE}"
+  description: "Tech event for industry professionals"
+
+# Future: Multi-Account LinkedIn Configuration (Post-Sprint 1)
+# Uncomment when implementing multi-account support
+# outreach:
+#   linkedin_accounts: 4
+#   account_priority: ["account_1", "account_2", "account_3", "account_4"]
+#   rate_limit_daily_per_account: 45
+
