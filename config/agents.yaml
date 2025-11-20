@@ -5,8 +5,10 @@
 sales_manager:
   llm_provider: "google"
   llm_model: "gemini-2.5-flash-preview-09-2025"
-  coordination_time: "19:15"  # Daily coordination start time (TEST: ~3 min ahead, local)
-  report_time: "19:16"  # Daily report generation time (TEST: ~4 min ahead, local)
+  coordination_time: "20:22"  # Legacy daily coordination time (fallback)
+  report_time: "20:23"  # Legacy daily report time (fallback)
+  coordination_interval_minutes: 10  # Interval-based coordination (takes precedence over time)
+  report_interval_minutes: 60  # Interval-based reporting (takes precedence over time)
   include_self_review: true  # Flag uncertain decisions for human review
   report_recipients:
     - "reports@yourcompany.com"
@@ -20,7 +22,8 @@ lead_finder:
   quality_threshold: 6.0  # Minimum quality score to process
   default_quality_score: 5.0  # Used when sheet cell is empty or invalid
   classification_mode: "rule_based_enhanced"  # Rules + LLM for edge cases
-  processing_time: "19:14"  # When to process new leads (TEST: set ~2 min ahead, local)
+  processing_time: "20:21"  # Legacy daily processing time (fallback)
+  processing_interval_minutes: 10  # Interval-based processing (takes precedence over time)
   
 # Outreach Agent Configuration
 outreach:
@@ -28,9 +31,10 @@ outreach:
   llm_model: "gemini-2.5-flash-preview-09-2025"
   rate_limit_daily: 45  # Max messages per day
   rate_limit_interval: "5-15 minutes"  # Random interval between sends
-  rate_limit_window: "19:13-23:00"  # Working hours (TEST: starts immediately for evening run)
+  rate_limit_window: "20:20-23:00"  # Working hours (TEST: starts immediately for evening run)
   linkedin_accounts: 1  # Single account
   response_check_interval: "2 hours"  # How often to check for responses
+  process_interval_minutes: 10  # How often to process allocated leads
   acceptable_error_rate: 0.10  # 10% for sentiment analysis
   message_max_length: 1000  # Max characters per message (Innovators Guild templates are ~400-500 chars)
   

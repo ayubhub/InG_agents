@@ -28,6 +28,7 @@ class Lead:
     created_at: datetime = field(default_factory=datetime.now)
     last_updated: datetime = field(default_factory=datetime.now)
     notes: Optional[str] = None
+    quality_score_placeholder: bool = False
 
 @dataclass
 class SendResult:

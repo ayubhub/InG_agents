@@ -109,9 +109,13 @@ class GoogleSheetsIO:
             
             # Update fields
             for field, value in updates.items():
-                if field in headers:
-                    col_index = headers.index(field) + 1  # gspread uses 1-based indexing
-                    self.leads_sheet.update_cell(row, col_index, value)
+                header_name = self._resolve_header(field, headers)
+                if not header_name:
+                    self.logger.warning(f"Unknown field '{field}' - skipping update for lead {lead_id}")
+                    continue
+                
+                col_index = headers.index(header_name) + 1  # gspread uses 1-based indexing
+                self.leads_sheet.update_cell(row, col_index, value)
             
             return True
             
@@ -132,6 +136,23 @@ class GoogleSheetsIO:
                     return False
         
         return True
+    
+    @staticmethod
+    def _normalize_key(key: Optional[str]) -> str:
+        if not key:
+            return ""
+        return re.sub(r'[^a-z0-9]+', '_', key.strip().lower()).strip('_')
+    
+    def _resolve_header(self, field: str, headers: List[str]) -> Optional[str]:
+        if field in headers:
+            return field
+        
+        normalized_target = self._normalize_key(field)
+        for header in headers:
+            if self._normalize_key(header) == normalized_target:
+                return header
+        
+        return None
     
     def _record_to_lead(self, record: Dict[str, Any]) -> Lead:
         """
@@ -211,17 +232,17 @@ class GoogleSheetsIO:
             self.logger.warning(f"Could not parse datetime: {value}")
             return None
         
-        def parse_quality_score(value: Optional[Any]) -> float:
+        def parse_quality_score(value: Optional[Any]) -> tuple[float, bool]:
             if value in (None, ""):
-                return self.default_quality_score
+                return self.default_quality_score, True
             str_value = str(value).strip().replace(",", ".")
             try:
-                return float(str_value)
+                return float(str_value), False
             except ValueError:
                 self.logger.warning(
                     f"Invalid quality score '{value}', using default {self.default_quality_score}"
                 )
-                return self.default_quality_score
+                return self.default_quality_score, True
         
         def parse_contact_status(value: Optional[str]) -> str:
             default_status = "Not Contacted"
@@ -249,6 +270,8 @@ class GoogleSheetsIO:
         if classification and classification.lower() == "not contacted":
             classification = None
         
+        quality_score, quality_placeholder = parse_quality_score(record.get("Quality Score"))
+        
         return Lead(
             id=record.get("Lead ID", ""),
             name=record.get("Name", ""),
@@ -256,7 +279,7 @@ class GoogleSheetsIO:
             company=record.get("Company", ""),
             linkedin_url=record.get("LinkedIn URL", ""),
             classification=classification,
-            quality_score=parse_quality_score(record.get("Quality Score")),
+            quality_score=quality_score,
             contact_status=parse_contact_status(record.get("Contact Status")),
             allocated_to=record.get("Allocated To"),
             allocated_at=parse_datetime(record.get("Allocated At")),
@@ -268,6 +291,7 @@ class GoogleSheetsIO:
             response_intent=record.get("Response Intent"),
             created_at=parse_datetime(record.get("Created At")) or datetime.now(),
             last_updated=parse_datetime(record.get("Last Updated")) or datetime.now(),
-            notes=record.get("Notes")
+            notes=record.get("Notes"),
+            quality_score_placeholder=quality_placeholder
         )
 

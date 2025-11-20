@@ -7,6 +7,8 @@ sales_manager:
   llm_model: "gemini-pro"
   coordination_time: "09:00"  # Daily coordination start time
   report_time: "09:15"  # Daily report generation time (covers previous day 00:00-23:59)
+  coordination_interval_minutes: 60  # Optional interval scheduling (takes precedence over time)
+  report_interval_minutes: 1440  # Optional interval scheduling (takes precedence over time)
   include_self_review: true  # Flag uncertain decisions for human review
   report_recipients:
     - "reports@yourcompany.com"
@@ -21,6 +23,7 @@ lead_finder:
   default_quality_score: 5.0  # Used when sheet cell is empty or invalid
   classification_mode: "rule_based_enhanced"  # Rules + LLM for edge cases
   processing_time: "10:00"  # When to process new leads
+  processing_interval_minutes: 60  # Optional interval scheduling (takes precedence over time)
   
 # Outreach Agent Configuration
 outreach:
@@ -31,6 +34,7 @@ outreach:
   rate_limit_window: "09:00-17:00"  # Working hours
   linkedin_accounts: 1  # Single account
   response_check_interval: "2 hours"  # How often to check for responses
+  process_interval_minutes: 30  # How often to process allocated leads
   acceptable_error_rate: 0.10  # 10% for sentiment analysis
   message_max_length: 1000  # Max characters per message (Innovators Guild templates are ~400-500 chars)
   

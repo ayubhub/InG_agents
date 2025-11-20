@@ -7,6 +7,7 @@ from datetime import datetime, time as dt_time, timedelta, date
 from typing import Dict, List
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from src.agents.base_agent import BaseAgent
 from src.core.models import Lead
 from src.integrations.email_service import EmailService
@@ -21,6 +22,12 @@ class SalesManagerAgent(BaseAgent):
         self.config_section = self.config.get("sales_manager", {})
         self.coordination_time = self.config_section.get("coordination_time", "09:00")
         self.report_time = self.config_section.get("report_time", "09:15")
+        self.coordination_interval_minutes = self._get_interval_minutes(
+            self.config_section.get("coordination_interval_minutes")
+        )
+        self.report_interval_minutes = self._get_interval_minutes(
+            self.config_section.get("report_interval_minutes")
+        )
         self.include_self_review = self.config_section.get("include_self_review", True)
         
         self.email_service = EmailService(self.config)
@@ -31,21 +38,37 @@ class SalesManagerAgent(BaseAgent):
     
     def _setup_scheduler(self) -> None:
         """Setup scheduled tasks."""
-        # Daily coordination at 9:00
-        hour, minute = map(int, self.coordination_time.split(":"))
-        self.scheduler.add_job(
-            self.coordinate_daily_operations,
-            trigger=CronTrigger(hour=hour, minute=minute),
-            id='coordination'
-        )
+        # Coordination job
+        if self.coordination_interval_minutes:
+            self.scheduler.add_job(
+                self.coordinate_daily_operations,
+                trigger=IntervalTrigger(minutes=self.coordination_interval_minutes),
+                id='coordination_interval',
+                next_run_time=datetime.now()
+            )
+        else:
+            hour, minute = map(int, self.coordination_time.split(":"))
+            self.scheduler.add_job(
+                self.coordinate_daily_operations,
+                trigger=CronTrigger(hour=hour, minute=minute),
+                id='coordination'
+            )
         
-        # Daily report at 9:15
-        hour, minute = map(int, self.report_time.split(":"))
-        self.scheduler.add_job(
-            self.generate_daily_report,
-            trigger=CronTrigger(hour=hour, minute=minute),
-            id='daily_report'
-        )
+        # Report job
+        if self.report_interval_minutes:
+            self.scheduler.add_job(
+                self.generate_daily_report,
+                trigger=IntervalTrigger(minutes=self.report_interval_minutes),
+                id='daily_report_interval',
+                next_run_time=datetime.now()
+            )
+        else:
+            hour, minute = map(int, self.report_time.split(":"))
+            self.scheduler.add_job(
+                self.generate_daily_report,
+                trigger=CronTrigger(hour=hour, minute=minute),
+                id='daily_report'
+            )
     
     def run(self) -> None:
         """Main agent loop."""
@@ -196,6 +219,16 @@ class SalesManagerAgent(BaseAgent):
         # This would collect uncertain decisions from other agents
         # For now, return empty list
         return []
+
+    @staticmethod
+    def _get_interval_minutes(value):
+        if value in (None, "", 0):
+            return None
+        try:
+            minutes = int(value)
+            return minutes if minutes > 0 else None
+        except (TypeError, ValueError):
+            return None
     
     def _generate_insights(self, metrics: Dict) -> str:
         """Generate insights using LLM."""

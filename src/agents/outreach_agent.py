@@ -23,6 +23,9 @@ class OutreachAgent(BaseAgent):
         
         self.config_section = self.config.get("outreach", {})
         self.response_check_interval = self.config_section.get("response_check_interval", "2 hours")
+        self.process_interval_minutes = int(
+            self.config_section.get("process_interval_minutes", 30)
+        )
         
         # Initialize components
         self.message_generator = MessageGenerator(llm_client=self.llm_client)
@@ -39,19 +42,21 @@ class OutreachAgent(BaseAgent):
     
     def _setup_scheduler(self) -> None:
         """Setup scheduled tasks."""
-        # Process allocated leads every 30 minutes
+        # Process allocated leads on interval
         self.scheduler.add_job(
             self.process_allocated_leads,
-            trigger=IntervalTrigger(minutes=30),
-            id='process_leads'
+            trigger=IntervalTrigger(minutes=self.process_interval_minutes),
+            id='process_leads',
+            next_run_time=datetime.now()
         )
         
-        # Check responses every 2 hours
+        # Check responses periodically
         hours = int(self.response_check_interval.split()[0])
         self.scheduler.add_job(
             self.monitor_responses,
             trigger=IntervalTrigger(hours=hours),
-            id='check_responses'
+            id='check_responses',
+            next_run_time=datetime.now()
         )
     
     def run(self) -> None:
