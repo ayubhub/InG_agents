@@ -18,6 +18,7 @@ lead_finder:
   lead_source: "google_sheets"  # CSV import or manual entry
   max_leads_per_day: 100
   quality_threshold: 6.0  # Minimum quality score to process
+  default_quality_score: 5.0  # Used when sheet cell is empty or invalid
   classification_mode: "rule_based_enhanced"  # Rules + LLM for edge cases
   processing_time: "10:00"  # When to process new leads
   

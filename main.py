@@ -48,15 +48,23 @@ class AgentOrchestrator:
             self.processes.append(process)
             self.logger.info(f"Started {name} agent (PID: {process.pid})")
     
-    def _run_agent(self, agent_name, agent_class, config_dict):
-        """Run agent in separate process - create agent inside process to avoid serialization issues"""
+    @staticmethod
+    def _run_agent(agent_name, agent_class, config_dict):
+        """Run agent in separate process - static method to avoid pickling issues"""
+        # Setup logger for this process
+        logger = setup_logger(f"{agent_name}_Process")
+        logger.info(f"🚀 Initializing process for agent: {agent_name}")
+        
         try:
             # Initialize shared components inside the process
+            logger.info(f"📦 Initializing shared components for {agent_name}...")
             state_manager = StateManager(config_dict)
             message_queue = MessageQueue(config_dict)
             llm_client = LLMClient(config_dict)
+            logger.info(f"✅ Shared components initialized for {agent_name}")
             
             # Create agent inside the process
+            logger.info(f"🤖 Creating agent instance: {agent_name}")
             agent = agent_class(
                 agent_name=agent_name,
                 config=config_dict,
@@ -65,13 +73,16 @@ class AgentOrchestrator:
                 llm_client=llm_client
             )
             
+            logger.info(f"▶️ Starting agent loop: {agent_name}")
             agent.start()
             agent.run()  # Blocking call - agent runs until stopped
         except Exception as e:
             import traceback
             error_msg = f"{agent_name} agent error: {e}\n{traceback.format_exc()}"
-            # Use print since logger might not work in subprocess
-            print(f"ERROR: {error_msg}")
+            # Use both logger and print to ensure output
+            if 'logger' in locals():
+                logger.error(error_msg)
+            print(f"❌ FATAL ERROR in {agent_name}: {error_msg}")
             raise
     
     def stop_all_agents(self):

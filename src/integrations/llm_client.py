@@ -6,7 +6,7 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import google.generativeai as genai
 from src.utils.logger import setup_logger
 
@@ -89,8 +89,22 @@ class LLMClient:
                     max_output_tokens=max_toks,
                 )
             )
-            
-            result = response.text
+            result = self._extract_response_text(response)
+            if not result:
+                finish_info = self._build_finish_info(response)
+                usage_info = getattr(response, "usage_metadata", None)
+                self.logger.error(
+                    "LLM returned empty content",
+                    extra={
+                        "finish_info": finish_info,
+                        "usage": {
+                            "prompt_tokens": getattr(usage_info, "prompt_token_count", None),
+                            "candidates_tokens": getattr(usage_info, "candidates_token_count", None),
+                            "total_tokens": getattr(usage_info, "total_token_count", None),
+                        } if usage_info else None,
+                    }
+                )
+                raise ValueError("LLM response did not contain any text parts")
             
             # Cache response
             if use_cache and self.cache_enabled:
@@ -99,7 +113,16 @@ class LLMClient:
             return result
             
         except Exception as e:
-            self.logger.error(f"LLM API error: {e}")
+            prompt_preview = full_prompt[:200] + ("..." if len(full_prompt) > 200 else "")
+            self.logger.error(
+                f"LLM API error: {e}",
+                extra={
+                    "prompt_preview": prompt_preview,
+                    "system_prompt_provided": bool(system_prompt),
+                    "temperature": temp,
+                    "max_tokens": max_toks,
+                }
+            )
             raise
     
     def generate_with_context(
@@ -168,6 +191,48 @@ class LLMClient:
         """Generate cache key from prompt."""
         text = f"{system_prompt or ''}{prompt}"
         return hashlib.md5(text.encode()).hexdigest()
+    
+    def _extract_response_text(self, response: Any) -> str:
+        """Safely extract text from response candidates."""
+        if not response:
+            return ""
+        
+        texts: List[str] = []
+        candidates = getattr(response, "candidates", []) or []
+        for idx, candidate in enumerate(candidates):
+            finish_reason = getattr(candidate, "finish_reason", None)
+            if finish_reason and str(finish_reason).upper() not in {"STOP", "FINISH_REASON_STOP"}:
+                self.logger.warning(
+                    f"LLM candidate {idx} finished with reason {finish_reason}",
+                    extra={"safety": getattr(candidate, "safety_ratings", None)}
+                )
+            
+            content = getattr(candidate, "content", None)
+            if not content:
+                continue
+            
+            parts = getattr(content, "parts", []) or []
+            for part in parts:
+                text = getattr(part, "text", None)
+                if text:
+                    texts.append(text.strip())
+        
+        return "\n".join(filter(None, texts)).strip()
+    
+    def _build_finish_info(self, response: Any) -> str:
+        """Collect finish reason diagnostics for logging."""
+        info_segments = []
+        
+        candidates = getattr(response, "candidates", []) or []
+        for idx, candidate in enumerate(candidates):
+            finish_reason = getattr(candidate, "finish_reason", None)
+            info_segments.append(f"candidate_{idx}:{finish_reason}")
+        
+        prompt_feedback = getattr(response, "prompt_feedback", None)
+        if prompt_feedback:
+            info_segments.append(f"prompt_feedback={prompt_feedback}")
+        
+        return "; ".join(info_segments) if info_segments else "no candidates"
     
     def _summarize_context(self, context: Dict[str, Any]) -> str:
         """

@@ -3,6 +3,7 @@ Google Sheets integration for reading and writing lead data.
 """
 
 import os
+import re
 import gspread
 from google.oauth2.service_account import Credentials
 from typing import List, Dict, Any, Optional
@@ -26,6 +27,8 @@ class GoogleSheetsIO:
         """
         self.config = config
         self.logger = setup_logger("GoogleSheetsIO")
+        lead_finder_cfg = self.config.get("lead_finder", {})
+        self.default_quality_score = lead_finder_cfg.get("default_quality_score", 5.0)
         
         # Get credentials path
         creds_path = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH", "config/google-credentials.json")
@@ -65,22 +68,14 @@ class GoogleSheetsIO:
             
             leads = []
             for record in records:
-                # Skip empty rows
                 if not record.get("Lead ID"):
                     continue
                 
-                # Apply filters
-                if filters:
-                    match = True
-                    for key, value in filters.items():
-                        if record.get(key) != value:
-                            match = False
-                            break
-                    if not match:
-                        continue
-                
-                # Convert to Lead object
                 lead = self._record_to_lead(record)
+                
+                if filters and not self._lead_matches_filters(lead, filters):
+                    continue
+                
                 leads.append(lead)
             
             return leads
@@ -124,6 +119,20 @@ class GoogleSheetsIO:
             self.logger.error(f"Error updating lead {lead_id}: {e}")
             return False
     
+    def _lead_matches_filters(self, lead: Lead, filters: Dict[str, Any]) -> bool:
+        """Check if lead matches provided filters."""
+        for key, expected_value in filters.items():
+            value = getattr(lead, key, None)
+            
+            if isinstance(expected_value, str):
+                if (value or "").strip().lower() != expected_value.strip().lower():
+                    return False
+            else:
+                if value != expected_value:
+                    return False
+        
+        return True
+    
     def _record_to_lead(self, record: Dict[str, Any]) -> Lead:
         """
         Convert Google Sheets record to Lead object.
@@ -138,24 +147,107 @@ class GoogleSheetsIO:
         def parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
             if not dt_str:
                 return None
+            
+            value = str(dt_str).strip()
+            if not value:
+                return None
+            
+            # Normalize stray unicode whitespace
+            value = re.sub(r"\s+", " ", value)
+            
+            iso_candidate = value
             try:
-                # Try ISO format first (with Z timezone)
-                if 'Z' in dt_str:
-                    return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-                # Try standard ISO format
-                return datetime.fromisoformat(dt_str)
+                if 'Z' in iso_candidate:
+                    return datetime.fromisoformat(iso_candidate.replace('Z', '+00:00'))
+                return datetime.fromisoformat(iso_candidate)
             except (ValueError, AttributeError):
-                # Try alternative formats (Google Sheets might return different formats)
+                pass
+            
+            fallback_formats = [
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+                "%Y-%m-%d",
+                "%Y-%m-%dT%H:%M:%S",
+                "%d.%m.%Y %H:%M:%S",
+                "%d.%m.%Y %H:%M",
+                "%d.%m.%Y",
+                "%d/%m/%Y %H:%M:%S",
+                "%d/%m/%Y %H:%M",
+                "%d/%m/%Y",
+            ]
+            
+            for fmt in fallback_formats:
                 try:
-                    # Format: "2025-01-15 10:30:00"
-                    return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                    return datetime.strptime(value, fmt)
                 except ValueError:
+                    continue
+            
+            # Try fixing common typos like 5-digit years (e.g., "17.11.20225")
+            match = re.match(r"(\d{1,2})[./](\d{1,2})[./](\d{4,5})(?:\s+(\d{1,2}:\d{2}(:\d{2})?))?", value)
+            if match:
+                day, month, year, time_part, _ = match.groups()
+                
+                if len(year) != 4:
+                    fixed_year = None
+                    if len(year) > 4:
+                        for idx in range(len(year)):
+                            candidate = year[:idx] + year[idx+1:]
+                            if len(candidate) == 4 and candidate.isdigit() and 1900 <= int(candidate) <= 2100:
+                                fixed_year = candidate
+                                break
+                    if not fixed_year and len(year) > 4:
+                        fixed_year = year[:4]
+                    year = fixed_year or year
+                
+                normalized = f"{day.zfill(2)}.{month.zfill(2)}.{year}"
+                if time_part:
+                    normalized = f"{normalized} {time_part}"
+                for fmt in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
                     try:
-                        # Format: "2025-01-15T10:30:00"
-                        return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
+                        return datetime.strptime(normalized, fmt)
                     except ValueError:
-                        self.logger.warning(f"Could not parse datetime: {dt_str}")
-                        return None
+                        continue
+            
+            self.logger.warning(f"Could not parse datetime: {value}")
+            return None
+        
+        def parse_quality_score(value: Optional[Any]) -> float:
+            if value in (None, ""):
+                return self.default_quality_score
+            str_value = str(value).strip().replace(",", ".")
+            try:
+                return float(str_value)
+            except ValueError:
+                self.logger.warning(
+                    f"Invalid quality score '{value}', using default {self.default_quality_score}"
+                )
+                return self.default_quality_score
+        
+        def parse_contact_status(value: Optional[str]) -> str:
+            default_status = "Not Contacted"
+            if not value:
+                return default_status
+            
+            normalized = str(value).strip()
+            valid_statuses = {
+                "Not Contacted",
+                "Allocated",
+                "Message Sent",
+                "Responded",
+                "Closed",
+                "Failed",
+            }
+            
+            if normalized in valid_statuses:
+                return normalized
+            
+            self.logger.warning(f"Unknown contact status '{value}', defaulting to {default_status}")
+            return default_status
+        
+        raw_classification = record.get("Classification")
+        classification = raw_classification.strip() if isinstance(raw_classification, str) else raw_classification
+        if classification and classification.lower() == "not contacted":
+            classification = None
         
         return Lead(
             id=record.get("Lead ID", ""),
@@ -163,9 +255,9 @@ class GoogleSheetsIO:
             position=record.get("Position", ""),
             company=record.get("Company", ""),
             linkedin_url=record.get("LinkedIn URL", ""),
-            classification=record.get("Classification"),
-            quality_score=float(record.get("Quality Score")) if record.get("Quality Score") else None,
-            contact_status=record.get("Contact Status", "Not Contacted"),
+            classification=classification,
+            quality_score=parse_quality_score(record.get("Quality Score")),
+            contact_status=parse_contact_status(record.get("Contact Status")),
             allocated_to=record.get("Allocated To"),
             allocated_at=parse_datetime(record.get("Allocated At")),
             message_sent=record.get("Message Sent"),

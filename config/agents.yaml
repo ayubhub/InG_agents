@@ -5,8 +5,8 @@
 sales_manager:
   llm_provider: "google"
   llm_model: "gemini-2.5-flash-preview-09-2025"
-  coordination_time: "01:01"  # Daily coordination start time (TEST: set to 3 min from now)
-  report_time: "01:03"  # Daily report generation time (TEST: set to 5 min from now)
+  coordination_time: "19:15"  # Daily coordination start time (TEST: ~3 min ahead, local)
+  report_time: "19:16"  # Daily report generation time (TEST: ~4 min ahead, local)
   include_self_review: true  # Flag uncertain decisions for human review
   report_recipients:
     - "reports@yourcompany.com"
@@ -18,8 +18,9 @@ lead_finder:
   lead_source: "google_sheets"  # CSV import or manual entry
   max_leads_per_day: 100
   quality_threshold: 6.0  # Minimum quality score to process
+  default_quality_score: 5.0  # Used when sheet cell is empty or invalid
   classification_mode: "rule_based_enhanced"  # Rules + LLM for edge cases
-  processing_time: "01:02"  # When to process new leads (TEST: set to 4 min from now)
+  processing_time: "19:14"  # When to process new leads (TEST: set ~2 min ahead, local)
   
 # Outreach Agent Configuration
 outreach:
@@ -27,7 +28,7 @@ outreach:
   llm_model: "gemini-2.5-flash-preview-09-2025"
   rate_limit_daily: 45  # Max messages per day
   rate_limit_interval: "5-15 minutes"  # Random interval between sends
-  rate_limit_window: "00:58-17:00"  # Working hours (TEST: starts immediately)
+  rate_limit_window: "19:13-23:00"  # Working hours (TEST: starts immediately for evening run)
   linkedin_accounts: 1  # Single account
   response_check_interval: "2 hours"  # How often to check for responses
   acceptable_error_rate: 0.10  # 10% for sentiment analysis
