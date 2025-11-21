@@ -425,7 +425,12 @@ class LinkedInSender:
             response.raise_for_status()
             
             result = response.json()
-            invite_id = result.get("id", result.get("invite_id", ""))
+            # Unipile API returns "invitation_id" field in successful response
+            invite_id = result.get("invitation_id", result.get("id", result.get("invite_id", "")))
+            
+            if not invite_id:
+                self.logger.warning(f"Invitation sent but no invitation_id in response: {result}")
+                invite_id = "unknown"  # Fallback if API doesn't return ID
             
             self.logger.info(f"✓ Invitation sent via Unipile: {invite_id}")
             
