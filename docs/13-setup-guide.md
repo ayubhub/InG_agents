@@ -22,7 +22,7 @@ Minimum required accounts for testing:
 - [ ] Google Gemini API key
 - [ ] Google Sheets API credentials (Service Account JSON)
 - [ ] Google Spreadsheet created and shared with Service Account
-- [ ] LinkedIn automation service account (**Gojiberry recommended** - Dripify does NOT support API for sending messages)
+- [ ] LinkedIn automation service account (**Unipile recommended** - full API support)
 - [ ] SMTP email credentials (for daily reports)
 
 **Estimated Setup Time**: 30-60 minutes
@@ -204,43 +204,78 @@ If you still want to explore Dripify:
 
 **Note**: This application requires the ability to **send messages via API**, which Dripify does not support. Consider using Gojiberry instead.
 
-### Option B: Gojiberry (✅ Recommended)
+### Option B: Gojiberry
+
+**Status**: Gojiberry's public API (`ext.gojiberry.ai/documentation`) is read-only for message sending. Not recommended.
+
+### Option C: Unipile (✅ Recommended - Best API Support)
+
+**Overview**: Unipile is an API-first service for direct LinkedIn messaging with full REST API support.
 
 #### Where to Get
 
-1. Visit: https://gojiberry.com
-2. Sign up for an account
-3. Go to API/Settings section (or Dashboard → API/Integrations)
-4. Generate API key
-5. Verify that Gojiberry provides REST API for sending LinkedIn messages
+1. Visit: https://unipile.com
+2. Sign up for an account (€49/month per account)
+3. Complete LinkedIn authentication flow
+4. Obtain your DSN (Data Source Name) and API key
+5. Get your LinkedIn account ID from Unipile dashboard
 
 #### Where to Configure
 
 **File**: `.env`
 
 ```bash
-LINKEDIN_SERVICE=gojiberry
-GOJIBERRY_API_KEY=your_gojiberry_api_key_here
-GOJIBERRY_API_URL=https://api.gojiberry.com/v1
+LINKEDIN_SERVICE=unipile
+UNIPILE_DSN=api1.unipile.com:13305  # Your unique DSN
+UNIPILE_API_KEY=your_access_token_here
+UNIPILE_ACCOUNT_ID=your_linkedin_account_id_here
 ```
 
-**Note**: 
-- Verify the actual API URL and endpoints in Gojiberry documentation
-- Ensure Gojiberry supports **sending messages via API** (not just webhooks)
-- If Gojiberry also doesn't support API, you'll need to find an alternative service
+#### Setup Steps
+
+1. **Register Account**:
+   - Go to https://developer.unipile.com
+   - Create account and verify email
+
+2. **Connect LinkedIn Account**:
+   - In Unipile dashboard, click "Add Account"
+   - Select "LinkedIn"
+   - Complete OAuth flow to authorize Unipile
+
+3. **Get Credentials**:
+   - **DSN**: Found in dashboard (e.g., `api1.unipile.com:13305`)
+   - **API Key**: Generate in Settings → API Keys
+   - **Account ID**: Copy from connected accounts list
+
+4. **Verify Connection**:
+   ```bash
+   curl -X GET "https://your-dsn/api/v1/users?account_id=YOUR_ACCOUNT_ID" \
+     -H "X-API-KEY: YOUR_API_KEY" \
+     -H "accept: application/json"
+   ```
+
+#### Features
+
+- ✅ Full REST API for sending messages
+- ✅ Automatic invitation handling
+- ✅ Polling for responses (no webhooks needed)
+- ✅ Direct LinkedIn integration
+- ✅ 40-45 messages/day within LinkedIn limits
+- ✅ Full documentation: https://developer.unipile.com/docs/api-usage
 
 #### Alternative Services
 
-If neither Dripify nor Gojiberry provide API access, consider these alternatives:
+If Unipile doesn't fit your needs:
 
 - **Phantombuster** (https://phantombuster.com) - Provides LinkedIn API
-- **LinkedIn Sales Navigator API** (official, but requires approval)
-- **Other LinkedIn automation tools** that provide REST API for message sending
+- **Expandi** (https://expandi.io) - LinkedIn automation with API
+- **Waalaxy** (https://www.waalaxy.com) - Check for API availability
 
 **Important**: Before choosing a service, verify that it provides:
 - ✅ REST API for **sending** LinkedIn messages
 - ✅ API authentication (API key or OAuth)
 - ✅ Ability to send messages to specific LinkedIn profile URLs
+- ✅ Invitation sending and status checking
 
 ### Verification
 

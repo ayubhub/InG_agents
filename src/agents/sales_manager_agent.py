@@ -20,15 +20,10 @@ class SalesManagerAgent(BaseAgent):
         super().__init__(*args, **kwargs)
         
         self.config_section = self.config.get("sales_manager", {})
-        self.coordination_time = self.config_section.get("coordination_time", "09:00")
-        self.report_time = self.config_section.get("report_time", "09:15")
-        self.coordination_interval_minutes = self._get_interval_minutes(
-            self.config_section.get("coordination_interval_minutes")
-        )
-        self.report_interval_minutes = self._get_interval_minutes(
-            self.config_section.get("report_interval_minutes")
-        )
         self.include_self_review = self.config_section.get("include_self_review", True)
+        
+        # Track last coordination time to process only new leads
+        self.last_coordination_time = datetime.now() - timedelta(days=1)  # Process all on first run
         
         self.email_service = EmailService(self.config)
         self.scheduler = BlockingScheduler()
@@ -37,38 +32,25 @@ class SalesManagerAgent(BaseAgent):
         self._setup_scheduler()
     
     def _setup_scheduler(self) -> None:
-        """Setup scheduled tasks."""
-        # Coordination job
-        if self.coordination_interval_minutes:
-            self.scheduler.add_job(
-                self.coordinate_daily_operations,
-                trigger=IntervalTrigger(minutes=self.coordination_interval_minutes),
-                id='coordination_interval',
-                next_run_time=datetime.now()
-            )
-        else:
-            hour, minute = map(int, self.coordination_time.split(":"))
-            self.scheduler.add_job(
-                self.coordinate_daily_operations,
-                trigger=CronTrigger(hour=hour, minute=minute),
-                id='coordination'
-            )
+        """Setup periodic tasks."""
+        # Coordination (lead allocation) - periodic polling
+        coord_interval = self.config_section.get("coordination_interval_minutes", 2)
+        self.scheduler.add_job(
+            self.coordinate_daily_operations,
+            trigger=IntervalTrigger(minutes=coord_interval),
+            id='coordination',
+            next_run_time=datetime.now()
+        )
         
-        # Report job
-        if self.report_interval_minutes:
-            self.scheduler.add_job(
-                self.generate_daily_report,
-                trigger=IntervalTrigger(minutes=self.report_interval_minutes),
-                id='daily_report_interval',
-                next_run_time=datetime.now()
-            )
-        else:
-            hour, minute = map(int, self.report_time.split(":"))
-            self.scheduler.add_job(
-                self.generate_daily_report,
-                trigger=CronTrigger(hour=hour, minute=minute),
-                id='daily_report'
-            )
+        # Daily report - once per day (this is fine)
+        report_hour = self.config_section.get("report_hour", 18)
+        self.scheduler.add_job(
+            self.generate_daily_report,
+            trigger=CronTrigger(hour=report_hour, minute=0),
+            id='daily_report'
+        )
+        
+        self.logger.info(f"Scheduler: coordination every {coord_interval} min, reports at {report_hour}:00")
     
     def run(self) -> None:
         """Main agent loop."""
@@ -76,17 +58,43 @@ class SalesManagerAgent(BaseAgent):
         self.scheduler.start()
     
     def coordinate_daily_operations(self) -> None:
-        """Coordinate daily operations."""
-        self.logger.info("Starting daily coordination")
+        """Allocate newly classified leads."""
+        self.logger.info("Coordinating lead allocation")
         
         try:
-            # Allocate leads to Outreach
-            allocated = self.allocate_leads(max_leads=50)
-            self.logger.info(f"Allocated {len(allocated)} leads to Outreach")
+            # Read classified leads not yet allocated
+            filters = {
+                "classification": ["Speaker", "Sponsor"],
+                "contact_status": "Not Contacted"
+            }
+            leads = self.state_manager.read_leads(filters)
             
-            # Monitor performance for current state (not previous day)
-            metrics = self.monitor_performance(report_period="all_time")
-            self.logger.info(f"Performance metrics: {metrics}")
+            # Filter: only leads updated since last coordination
+            new_leads = [
+                lead for lead in leads 
+                if lead.last_updated and lead.last_updated > self.last_coordination_time
+            ]
+            
+            if new_leads:
+                self.logger.info(f"⚡ Found {len(new_leads)} newly classified leads")
+                
+                # Get quality threshold from lead_finder config
+                lead_finder_config = self.config.get("lead_finder", {})
+                quality_threshold = lead_finder_config.get("quality_threshold", 6.0)
+                
+                for lead in new_leads:
+                    # Allocation logic
+                    if lead.quality_score and lead.quality_score >= quality_threshold:
+                        updates = {
+                            "contact_status": "Allocated",
+                            "allocated_to": "Outreach",
+                            "allocated_at": datetime.now().isoformat(),
+                            "last_updated": datetime.now().isoformat()
+                        }
+                        self.state_manager.update_lead(lead.id, updates)
+            
+            # Update last check time
+            self.last_coordination_time = datetime.now()
             
         except Exception as e:
             self.logger.error(f"Error in coordination: {e}")
@@ -219,16 +227,6 @@ class SalesManagerAgent(BaseAgent):
         # This would collect uncertain decisions from other agents
         # For now, return empty list
         return []
-
-    @staticmethod
-    def _get_interval_minutes(value):
-        if value in (None, "", 0):
-            return None
-        try:
-            minutes = int(value)
-            return minutes if minutes > 0 else None
-        except (TypeError, ValueError):
-            return None
     
     def _generate_insights(self, metrics: Dict) -> str:
         """Generate insights using LLM."""

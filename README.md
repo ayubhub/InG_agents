@@ -68,16 +68,19 @@ python main.py
 
 ## Features
 
+- **Continuous Processing**: Agents check for new leads every 2-10 minutes
+- **Simple Architecture**: Google Sheets as single source of truth (no event files)
+- **Fast Pipeline**: Leads processed in 4-10 minutes (not 24 hours)
+- **No Manual Timers**: Just run and go
 - **Three AI Agents**: Sales Manager (coordination), Lead Finder (prospecting), Outreach (messaging)
 - **LLM Integration**: Google Gemini Preview API for intelligent decisions and message generation
-- **Inter-Agent Communication**: File-based message queue (no servers needed)
-- **Shared State Management**: Google Sheets as database, SQLite + local files for state
+- **Shared State Management**: Google Sheets as database, SQLite for rate limiting
 - **Automated Lead Classification**: Speaker/Sponsor classification with quality scoring
 - **Personalised Messages**: LLM-generated messages with context from other agents
 - **Response Analysis**: Sentiment and intent detection using LLM (10% error rate acceptable)
 - **Rate-Limited Outreach**: 30-50 messages/day, compliance with LinkedIn ToS
 - **Daily Reports**: Comprehensive performance reports with Agent Self-Review section
-- **Context Sharing**: Agents share knowledge and context for better decisions
+- **Unipile Integration**: Direct LinkedIn messaging with API
 - **No External Servers**: All storage is local (SQLite + files)
 
 ## Requirements
@@ -85,7 +88,7 @@ python main.py
 - Python 3.10+
 - **No external servers needed** - all storage is local (SQLite + files)
 - Google Sheets API access
-- LinkedIn automation service (Dripify or Gojiberry)
+- LinkedIn automation service (Unipile recommended, Dripify/Gojiberry as alternatives)
 - Google Gemini Preview API access
 - SMTP email access for reports
 

@@ -298,14 +298,180 @@ def send_linkedin_message_via_gojiberry(linkedin_url: str, message: str) -> Send
 
 ---
 
+### Unipile API (Polling Mode)
+
+**Base URL**: Unique DSN per account (e.g., `https://api1.unipile.com:13305/api/v1`)
+
+**Authentication**: API Key in `X-API-KEY` header
+
+**Overview**: Unipile is an API-first service for direct LinkedIn messaging. Uses **polling** for checking responses (webhooks not required).
+
+#### Setup
+
+```python
+dsn = os.getenv("UNIPILE_DSN")  # e.g., "api1.unipile.com:13305"
+api_key = os.getenv("UNIPILE_API_KEY")
+account_id = os.getenv("UNIPILE_ACCOUNT_ID")
+
+headers = {
+    'X-API-KEY': api_key,
+    'accept': 'application/json',
+    'Content-Type': 'application/json'
+}
+
+base_url = f"https://{dsn}/api/v1"
+```
+
+#### Connection Flow
+
+LinkedIn requires users to be connected before sending messages. Unipile handles this through invitations:
+
+**1. Search for user in contacts**
+
+```python
+url = f"{base_url}/users"
+params = {"account_id": account_id, "provider": "LINKEDIN"}
+response = requests.get(url, headers=headers, params=params)
+users = response.json().get("items", [])
+
+# Find user by LinkedIn URL match
+user = next((u for u in users if linkedin_url in u.get("provider_id", "")), None)
+```
+
+**2. Send invitation (if user not in contacts)**
+
+```python
+url = f"{base_url}/users/invite"
+payload = {
+    "account_id": account_id,
+    "linkedin_url": linkedin_url,
+    "message": message
+}
+response = requests.post(url, json=payload, headers=headers)
+invite_id = response.json().get("id")
+
+# Return special status
+return SendResult(
+    success=False,  # Not a message send
+    message_id=invite_id,
+    status='invitation_sent'
+)
+```
+
+**3. Check invitation status (polling, every 6 hours)**
+
+```python
+# Re-search for user to see if now connected
+user = find_user_by_linkedin_url(linkedin_url)
+if user and user.get("connection_status") == "connected":
+    return "accepted"
+return "pending"
+```
+
+**4. Create or find chat**
+
+```python
+url = f"{base_url}/chats"
+payload = {
+    "account_id": account_id,
+    "attendees_ids": [user_id],
+    "provider": "LINKEDIN"
+}
+response = requests.post(url, json=payload, headers=headers)
+chat_id = response.json().get("id")
+```
+
+**5. Send message**
+
+```python
+url = f"{base_url}/chats/{chat_id}/messages"
+payload = {
+    "account_id": account_id,
+    "text": message,
+    "type": "text"
+}
+response = requests.post(url, json=payload, headers=headers)
+message_id = response.json().get("id")
+```
+
+#### Polling for Responses
+
+**Endpoint**: `GET /api/v1/messages`
+
+**Parameters**:
+- `account_id`: LinkedIn account ID in Unipile
+- `type=received`: Only incoming messages
+- `since={ISO_timestamp}`: Only new messages since last check
+- `limit=100`: Maximum messages to return
+
+**Implementation**:
+
+```python
+def check_responses() -> List[Dict]:
+    # Read timestamp of last check from file
+    since = read_timestamp_from_file("data/state/unipile_last_check.txt")
+    # Default: 2 hours ago if file doesn't exist
+    
+    url = f"{base_url}/messages"
+    params = {
+        "account_id": account_id,
+        "type": "received",
+        "since": since,
+        "limit": 100
+    }
+    
+    response = requests.get(url, headers=headers, params=params)
+    messages = response.json().get("items", [])
+    
+    # Transform to unified format
+    responses = []
+    for msg in messages:
+        # Get chat details to extract sender LinkedIn URL
+        chat_id = msg.get("chat_id")
+        chat_info = get_chat_info(chat_id)
+        
+        responses.append({
+            "message_id": msg.get("id"),
+            "text": msg.get("text", ""),
+            "linkedin_url": chat_info.get("sender_linkedin_url"),
+            "timestamp": msg.get("date")
+        })
+    
+    # Update timestamp cache
+    save_timestamp_to_file("data/state/unipile_last_check.txt", datetime.now())
+    
+    return responses
+```
+
+**Frequency**: Every 2 hours (configurable via `response_check_interval_hours`)
+
+#### Rate Limits
+
+- **Invitations**: 30-50 per day (recommended: 40)
+- **Messages**: 100-150 per day (recommended: 45)
+- **API Requests**: No official limits, but recommend polling no more than once per hour
+
+#### Error Handling
+
+- **429 Rate Limit**: Log and skip cycle
+- **404 User Not Found**: Send invitation
+- **400 Bad Request**: Check data format, log error
+- **500 Server Error**: Retry with exponential backoff (max 3 attempts)
+
+#### Cost
+
+€49/month per account (includes all API features)
+
+---
+
 ### LinkedIn Sender Abstraction
 
-**Implementation**: Create unified interface for both services
+**Implementation**: Create unified interface for all services
 
 ```python
 class LinkedInSender:
     def __init__(self, service: str, api_key: str, api_url: str):
-        self.service = service  # "dripify" or "gojiberry"
+        self.service = service  # "dripify", "gojiberry", or "unipile"
         self.api_key = api_key
         self.api_url = api_url
         
@@ -314,6 +480,8 @@ class LinkedInSender:
             return send_linkedin_message_via_dripify(linkedin_url, message)
         elif self.service == "gojiberry":
             return send_linkedin_message_via_gojiberry(linkedin_url, message)
+        elif self.service == "unipile":
+            return send_linkedin_message_via_unipile(linkedin_url, message)
         else:
             raise ValueError(f"Unknown service: {self.service}")
 ```

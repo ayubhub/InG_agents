@@ -11,7 +11,19 @@
 
 ## Executive Summary
 
-Implementation guide for three AI agents with inter-agent communication, LLM integration, and shared state management. See Technical Solution (02) for architecture details.
+Implementation guide for three AI agents with simplified polling architecture, LLM integration, and Google Sheets as single source of truth. See Technical Solution (02) for architecture details.
+
+### Scheduling Architecture
+
+**All agents use IntervalTrigger with 2-10 minute intervals:**
+- Lead Finder: Polls for uncontacted leads every 2 minutes
+- Sales Manager: Polls for classified leads every 2 minutes, generates reports daily at 18:00
+- Outreach: Polls for allocated leads every 2 minutes, checks responses every 2 hours
+
+**Agents track `last_check_time` to avoid reprocessing:**
+- Each agent remembers when it last checked Google Sheets
+- Only processes leads updated since `last_check_time`
+- Provides fast reaction (2-10 min) without event files
 
 ---
 

@@ -73,19 +73,15 @@ class BaseAgent(ABC):
     
     def publish_event(self, event_type: str, data: Dict) -> None:
         """
-        Publish an event to the message queue.
+        Publish an event (deprecated, now no-op for backward compatibility).
+        Events are no longer used - agents coordinate through Google Sheets.
         
         Args:
             event_type: Event type
             data: Event data
         """
-        event = {
-            "type": event_type,
-            "agent_from": self.agent_name,
-            "agent_to": data.get("agent_to"),
-            "data": data
-        }
-        self.message_queue.publish(event)
+        # Just log, don't create files
+        self.logger.debug(f"Event (deprecated): {event_type}")
     
     def subscribe_to_events(self, event_types: List[str], callback: Callable) -> None:
         """

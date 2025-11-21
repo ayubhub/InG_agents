@@ -1,50 +1,50 @@
 # InG AI Sales Department - Agent Configuration
-# Copy this file to agents.yaml and adjust as needed
+
+# Lead Finder Agent Configuration
+lead_finder:
+  llm_provider: "google"
+  llm_model: "gemini-2.5-flash-preview-09-2025"
+  lead_source: "google_sheets"
+  max_leads_per_day: 100
+  quality_threshold: 6.0  # Minimum quality score to process
+  default_quality_score: 5.0  # Used when sheet cell is empty or invalid
+  classification_mode: "rule_based_enhanced"
+  processing_interval_minutes: 2  # Check for new leads every 2 minutes
 
 # Sales Manager Agent Configuration
 sales_manager:
   llm_provider: "google"
   llm_model: "gemini-2.5-flash-preview-09-2025"
-  coordination_time: "20:22"  # Legacy daily coordination time (fallback)
-  report_time: "20:23"  # Legacy daily report time (fallback)
-  coordination_interval_minutes: 10  # Interval-based coordination (takes precedence over time)
-  report_interval_minutes: 60  # Interval-based reporting (takes precedence over time)
-  include_self_review: true  # Flag uncertain decisions for human review
+  coordination_interval_minutes: 2  # Allocate leads every 2 minutes
+  report_hour: 18  # Daily report at 18:00
+  include_self_review: true
   report_recipients:
     - "reports@yourcompany.com"
-  
-# Lead Finder Agent Configuration
-lead_finder:
-  llm_provider: "google"
-  llm_model: "gemini-2.5-flash-preview-09-2025"
-  lead_source: "google_sheets"  # CSV import or manual entry
-  max_leads_per_day: 100
-  quality_threshold: 6.0  # Minimum quality score to process
-  default_quality_score: 5.0  # Used when sheet cell is empty or invalid
-  classification_mode: "rule_based_enhanced"  # Rules + LLM for edge cases
-  processing_time: "20:21"  # Legacy daily processing time (fallback)
-  processing_interval_minutes: 10  # Interval-based processing (takes precedence over time)
-  
+
 # Outreach Agent Configuration
 outreach:
   llm_provider: "google"
   llm_model: "gemini-2.5-flash-preview-09-2025"
-  rate_limit_daily: 45  # Max messages per day
-  rate_limit_interval: "5-15 minutes"  # Random interval between sends
-  rate_limit_window: "20:20-23:00"  # Working hours (TEST: starts immediately for evening run)
-  linkedin_accounts: 1  # Single account
-  response_check_interval: "2 hours"  # How often to check for responses
-  process_interval_minutes: 10  # How often to process allocated leads
-  acceptable_error_rate: 0.10  # 10% for sentiment analysis
-  message_max_length: 1000  # Max characters per message (Innovators Guild templates are ~400-500 chars)
+  rate_limit_daily: 45
+  rate_limit_interval: "5-15 minutes"  # Production
+  # rate_limit_interval: "1-2 minutes"  # Testing (uncomment)
+  rate_limit_window: "09:00-18:00"
+  process_interval_minutes: 2  # Check for allocated leads every 2 minutes
+  response_check_interval_hours: 2  # Production
+  # response_check_interval_hours: 1  # Testing (uncomment)
+  invitation_check_interval_hours: 6  # Production
+  # invitation_check_interval_hours: 1  # Testing (uncomment)
+  linkedin_accounts: 1
+  acceptable_error_rate: 0.10
+  message_max_length: 1000
   
 # Storage Configuration
 storage:
-  data_directory: "data"  # Local data directory
+  data_directory: "data"
   sqlite_db: "data/state/agents.db"
   queue_directory: "data/queue"
   cache_directory: "data/cache"
-  events_directory: "data/events"
+  # events_directory removed (no longer needed)
   
 # LLM Configuration
 llm:
@@ -65,10 +65,12 @@ google_sheets:
   
 # LinkedIn Service Configuration
 linkedin:
-  service: "${LINKEDIN_SERVICE}"  # "dripify" or "gojiberry"
-  api_key: "${DRIPIFY_API_KEY}"  # or GOJIBERRY_API_KEY
-  api_url: "${DRIPIFY_API_URL}"  # or GOJIBERRY_API_URL
-  account_id: "your_account_id"  # LinkedIn account identifier
+  service: "${LINKEDIN_SERVICE}"  # "dripify", "gojiberry", or "unipile"
+  
+  # Unipile-specific
+  dsn: "${UNIPILE_DSN}"
+  api_key: "${UNIPILE_API_KEY}"
+  account_id: "${UNIPILE_ACCOUNT_ID}"
   
 # Email Configuration
 email:

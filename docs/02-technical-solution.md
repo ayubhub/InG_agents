@@ -11,9 +11,15 @@
 
 ## Executive Summary
 
-Multi-agent, event-driven architecture with three AI agents: **Sales Manager** (coordinates), **Lead Finder** (discovers), **Outreach** (messages). Uses Google Sheets as primary database, **local file-based storage** (SQLite + JSON files) for message queue and caching, **Google Gemini Preview API** for LLM intelligence.
+Multi-agent architecture with three AI agents: **Sales Manager** (coordinates), **Lead Finder** (discovers), **Outreach** (messages). Uses Google Sheets as single source of truth, **local file-based storage** (SQLite + JSON files) for caching, **Google Gemini Preview API** for LLM intelligence.
 
-**Design Principle**: Simple solution based on Google Sheets and local files, no servers, no over-engineering.
+**Design Principle**: Simple solution based on Google Sheets polling, no event files, no servers, no over-engineering.
+
+**Architecture**: Polling-Only (Simple & Reliable)
+- Agents poll Google Sheets every 2-10 minutes
+- Agents track `last_check_time` to process only new/updated leads
+- Lead status (`contact_status`) determines which agent should process it
+- No event files needed - Google Sheets is the single source of truth
 
 ---
 
@@ -32,10 +38,9 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
               │          │
     ┌─────────▼──────────▼──────────┐
     │  Shared State & Communication  │
-    │  - Google Sheets (Primary DB)   │
-    │  - SQLite (Local State)         │
-    │  - File-based Message Queue     │
-    │  - JSON Files (Cache/Events)    │
+    │  - Google Sheets (Single Source)│
+    │  - SQLite (Rate Limiting)       │
+    │  - JSON Files (Cache Only)      │
     └─────────┬──────────────────────┘
               │
     ┌─────────▼──────────┐
@@ -92,20 +97,25 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
 
 ## Inter-Agent Communication
 
-### File-Based Message Queue
+### Polling-Only Architecture (Simplified)
 
-**Location**: `data/queue/` directory
+**Agents coordinate through Google Sheets as single source of truth:**
+- Each agent polls Sheets every 2-10 minutes
+- Agents track `last_check_time` to process only new/updated leads
+- Lead status (`contact_status`) determines which agent should process it
 
-**Structure**: Each event stored as JSON file
-- `data/queue/pending/{timestamp}_{event_id}.json` - Pending events
-- `data/queue/processed/{timestamp}_{event_id}.json` - Processed events (archive)
-- `data/queue/failed/{timestamp}_{event_id}.json` - Failed events
+**Flow**:
+1. Lead Finder: `Not Contacted` → classify → `Not Contacted` (but with Classification)
+2. Sales Manager: checks `last_updated` → allocates → `Allocated`
+3. Outreach: checks `allocated_at` → sends → `Message Sent`
 
-**Event Types**:
-- `lead_discovered` - Lead Finder → Sales Manager
-- `lead_allocation` - Sales Manager → Outreach
-- `message_sent` - Outreach → Sales Manager
-- `response_received` - Outreach → Sales Manager
+**Benefits**:
+- ✅ Simple: one mechanism (Sheets)
+- ✅ Reliable: no file sync issues
+- ✅ Fast: 4-10 minutes end-to-end
+- ✅ Debuggable: all state visible in Sheets
+
+**No Event Files**: Agents previously used file-based events, but this was removed for simplicity. Google Sheets `last_updated` timestamps provide sufficient coordination.
 - `agent_error` - Any agent → Sales Manager (logged, not escalated)
 
 **Event Structure**:

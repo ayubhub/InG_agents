@@ -11,9 +11,9 @@
 
 ## Executive Summary
 
-**Один главный скрипт** (`main.py`) запускает все три агента параллельно. Агенты работают как фоновые процессы/потоки, общаются через файловую очередь и работают 24/7 до остановки.
+**Один главный скрипт** (`main.py`) запускает все три агента параллельно. Агенты работают непрерывно, опрашивая Google Sheets каждые 2-10 минут.
 
-**Логика запуска** (как в prompt-01.md): Скрипт запускается каждый день в 9:00 (через cron). При запуске проверяется, работает ли уже процесс. Если работает - новый процесс выходит. Если процесс "упал" - новый продолжает работу.
+**Простая конфигурация**: Не нужно вручную устанавливать время запуска - агенты сами координируются через Google Sheets.
 
 ---
 
@@ -24,17 +24,17 @@
 ```
 python main.py
     │
-    ├── Sales Manager Agent (thread/process)
-    │   └── Работает по расписанию (9:00 AM координация, 9:15 AM отчет)
+    ├── Sales Manager Agent (process)
+    │   └── Polls Google Sheets every 2 min, reports daily at 18:00
     │
-    ├── Lead Finder Agent (thread/process)
-    │   └── Работает по расписанию (10:00 AM) или по запросу
+    ├── Lead Finder Agent (process)
+    │   └── Polls for new leads every 2 min
     │
-    └── Outreach Agent (thread/process)
-        └── Работает постоянно, проверяет очередь и отправляет сообщения
+    └── Outreach Agent (process)
+        └── Polls for allocated leads every 2 min, checks responses every 2 hours
 ```
 
-**Принцип**: Один процесс Python, три параллельных агента внутри.
+**Принцип**: Один главный процесс, три параллельных агента, каждый со своим scheduler.
 
 ---
 
@@ -240,22 +240,26 @@ if __name__ == "__main__":
 
 ### Как работает каждый агент
 
+#### Lead Finder Agent
+- **Запуск**: Автоматически при старте `main.py`
+- **Расписание**: Каждые 2 минуты (configurable via `processing_interval_minutes`)
+- **Работа**: Polls Google Sheets for uncontacted leads, classifies them
+- **Tracking**: Remembers `last_check_time` to process only new leads
+
 #### Sales Manager Agent
 - **Запуск**: Автоматически при старте `main.py`
 - **Расписание**: 
-  - 9:00 AM - координация операций
-  - 9:15 AM - генерация ежедневного отчета
-- **Работа**: Использует APScheduler для планирования задач
-- **Состояние**: Работает постоянно, выполняет задачи по расписанию
-
-#### Lead Finder Agent
-- **Запуск**: Автоматически при старте `main.py`
-- **Расписание**: 10:00 AM - обработка новых лидов
-- **Работа**: Читает лиды из Google Sheets, классифицирует, обновляет
-- **Состояние**: Работает постоянно, обрабатывает лиды по расписанию
+  - Coordination: Every 2 minutes (configurable via `coordination_interval_minutes`)
+  - Report: Daily at 18:00 (configurable via `report_hour`)
+- **Работа**: Polls for classified leads, allocates to Outreach
+- **Tracking**: Remembers `last_coordination_time` to process only newly classified leads
 
 #### Outreach Agent
 - **Запуск**: Автоматически при старте `main.py`
+- **Расписание**:
+  - Process leads: Every 2 minutes (configurable via `process_interval_minutes`)
+  - Check responses: Every 2 hours (configurable via `response_check_interval_hours`)
+  - Check invitations: Every 6 hours (configurable via `invitation_check_interval_hours`)
 - **Работа**: 
   - Постоянно проверяет очередь выделенных лидов
   - Отправляет сообщения с учетом rate limiting
@@ -285,6 +289,35 @@ python main.py
 6. Запускаются три агента в отдельных процессах
 7. Главный процесс остается живым и мониторит агентов
 8. При завершении lock file удаляется
+
+### Конфигурация
+
+**No Manual Timer Adjustments Needed!**
+
+1. Set intervals in `config/agents.yaml`:
+   - **Testing**: `*_interval_minutes: 2`
+   - **Production**: `*_interval_minutes: 10`
+
+2. Run: `python main.py`
+
+That's it! Agents self-coordinate through Google Sheets. No need to manually set specific times before each run.
+
+**Example config for testing (fast processing)**:
+```yaml
+lead_finder:
+  processing_interval_minutes: 2
+
+sales_manager:
+  coordination_interval_minutes: 2
+  report_hour: 18
+
+outreach:
+  process_interval_minutes: 2
+  response_check_interval_hours: 2
+  invitation_check_interval_hours: 6
+```
+
+**Result**: Leads processed in 4-10 minutes end-to-end (not 24 hours).
 
 ### Остановка системы
 

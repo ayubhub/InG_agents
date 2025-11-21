@@ -37,7 +37,8 @@ class SendResult:
     message_id: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.now)
     error_message: Optional[str] = None
-    service_used: Optional[str] = None  # "dripify" or "gojiberry"
+    service_used: Optional[str] = None  # "dripify", "gojiberry", or "unipile"
+    status: Optional[str] = None  # "sent", "invitation_sent", "pending_connection"
 
 @dataclass
 class ResponseAnalysis:

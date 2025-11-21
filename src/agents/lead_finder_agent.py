@@ -24,10 +24,6 @@ class LeadFinderAgent(BaseAgent):
         self.max_leads_per_day = self.config_section.get("max_leads_per_day", 100)
         self.quality_threshold = self.config_section.get("quality_threshold", 6.0)
         self.default_quality_score = self.config_section.get("default_quality_score", 5.0)
-        self.processing_time = self.config_section.get("processing_time", "10:00")
-        self.processing_interval_minutes = self._get_interval_minutes(
-            self.config_section.get("processing_interval_minutes")
-        )
         
         # Initialize classifier and scorer
         self.classifier = LeadClassifier(llm_client=self.llm_client)
@@ -37,21 +33,17 @@ class LeadFinderAgent(BaseAgent):
         self._setup_scheduler()
     
     def _setup_scheduler(self) -> None:
-        """Setup scheduled tasks."""
-        if self.processing_interval_minutes:
-            self.scheduler.add_job(
-                self.process_uncontacted_leads,
-                trigger=IntervalTrigger(minutes=self.processing_interval_minutes),
-                id='process_leads_interval',
-                next_run_time=datetime.now()
-            )
-        else:
-            hour, minute = map(int, self.processing_time.split(":"))
-            self.scheduler.add_job(
-                self.process_uncontacted_leads,
-                trigger=CronTrigger(hour=hour, minute=minute),
-                id='process_leads'
-            )
+        """Setup periodic processing."""
+        interval = self.config_section.get("processing_interval_minutes", 2)
+        
+        self.scheduler.add_job(
+            self.process_uncontacted_leads,
+            trigger=IntervalTrigger(minutes=interval),
+            id='process_leads',
+            next_run_time=datetime.now()  # Run immediately on start
+        )
+        
+        self.logger.info(f"Scheduler: process_leads every {interval} minutes")
     
     def run(self) -> None:
         """Main agent loop."""
@@ -88,17 +80,6 @@ class LeadFinderAgent(BaseAgent):
             lead.quality_score_placeholder = False
         
         return lead
-
-    @staticmethod
-    def _get_interval_minutes(value):
-        """Return interval minutes as int if value is truthy, else None."""
-        if value in (None, "", 0):
-            return None
-        try:
-            minutes = int(value)
-            return minutes if minutes > 0 else None
-        except (TypeError, ValueError):
-            return None
     
     def classify_prospect(self, lead: Lead) -> str:
         """

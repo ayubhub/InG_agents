@@ -22,10 +22,9 @@ class OutreachAgent(BaseAgent):
         super().__init__(*args, **kwargs)
         
         self.config_section = self.config.get("outreach", {})
-        self.response_check_interval = self.config_section.get("response_check_interval", "2 hours")
-        self.process_interval_minutes = int(
-            self.config_section.get("process_interval_minutes", 30)
-        )
+        
+        # Track last process time to process only new leads
+        self.last_process_time = datetime.now() - timedelta(days=1)  # Process all on first run
         
         # Initialize components
         self.message_generator = MessageGenerator(llm_client=self.llm_client)
@@ -41,23 +40,35 @@ class OutreachAgent(BaseAgent):
         self._setup_scheduler()
     
     def _setup_scheduler(self) -> None:
-        """Setup scheduled tasks."""
-        # Process allocated leads on interval
+        """Setup periodic tasks."""
+        # Process allocated leads
+        process_interval = self.config_section.get("process_interval_minutes", 2)
         self.scheduler.add_job(
             self.process_allocated_leads,
-            trigger=IntervalTrigger(minutes=self.process_interval_minutes),
+            trigger=IntervalTrigger(minutes=process_interval),
             id='process_leads',
             next_run_time=datetime.now()
         )
         
-        # Check responses periodically
-        hours = int(self.response_check_interval.split()[0])
+        # Check responses
+        response_hours = self.config_section.get("response_check_interval_hours", 2)
         self.scheduler.add_job(
             self.monitor_responses,
-            trigger=IntervalTrigger(hours=hours),
+            trigger=IntervalTrigger(hours=response_hours),
             id='check_responses',
             next_run_time=datetime.now()
         )
+        
+        # Check pending invitations (for Unipile)
+        invitation_hours = self.config_section.get("invitation_check_interval_hours", 6)
+        self.scheduler.add_job(
+            self.check_pending_invitations,
+            trigger=IntervalTrigger(hours=invitation_hours),
+            id='check_invitations',
+            next_run_time=datetime.now()
+        )
+        
+        self.logger.info(f"Scheduler: process every {process_interval} min")
     
     def run(self) -> None:
         """Main agent loop."""
@@ -65,15 +76,24 @@ class OutreachAgent(BaseAgent):
         self.scheduler.start()
     
     def process_allocated_leads(self) -> None:
-        """Process allocated leads and send messages."""
+        """Process newly allocated leads."""
         self.logger.info("Processing allocated leads")
         
         try:
-            # Get allocated leads
+            # Read allocated leads
             filters = {"contact_status": "Allocated", "allocated_to": "Outreach"}
             leads = self.state_manager.read_leads(filters)
             
-            for lead in leads:
+            # Filter: only recently allocated
+            new_leads = [
+                lead for lead in leads 
+                if lead.allocated_at and lead.allocated_at > self.last_process_time
+            ]
+            
+            if new_leads:
+                self.logger.info(f"⚡ Found {len(new_leads)} newly allocated leads")
+            
+            for lead in new_leads:
                 try:
                     # Check rate limit
                     if not self.rate_limiter.can_send():
@@ -87,26 +107,27 @@ class OutreachAgent(BaseAgent):
                     result = self.send_message(lead, message)
                     
                     if result.success:
-                        # Update lead status
                         updates = {
                             "contact_status": "Message Sent",
-                            "Message Sent": message,
-                            "Message Sent At": datetime.now().isoformat(),
-                            "Last Updated": datetime.now().isoformat()
+                            "message_sent": message,
+                            "message_sent_at": datetime.now().isoformat(),
+                            "last_updated": datetime.now().isoformat()
                         }
                         self.state_manager.update_lead(lead.id, updates)
                         
-                        # Publish event
-                        self.publish_event("message_sent", {
-                            "agent_to": "SalesManager",
-                            "lead_id": lead.id,
-                            "message_id": result.message_id
-                        })
-                        
-                        # Wait before next send
                         wait_time = self.rate_limiter.record_send()
-                        self.logger.info(f"Message sent to {lead.name}, waiting {wait_time}s")
+                        self.logger.info(f"✓ Message sent to {lead.name}")
                         time.sleep(wait_time)
+                        
+                    elif result.status == "invitation_sent":
+                        updates = {
+                            "contact_status": "Invitation Sent",
+                            "notes": f"Invite ID: {result.message_id}, URL: {lead.linkedin_url}",
+                            "last_updated": datetime.now().isoformat()
+                        }
+                        self.state_manager.update_lead(lead.id, updates)
+                        self.logger.info(f"→ Invitation sent to {lead.name}")
+                        
                     else:
                         self.logger.error(f"Failed to send message to {lead.name}: {result.error_message}")
                         
@@ -116,6 +137,9 @@ class OutreachAgent(BaseAgent):
                 except Exception as e:
                     self.logger.error(f"Error processing lead {lead.id}: {e}")
                     continue
+            
+            # Update last check time
+            self.last_process_time = datetime.now()
                     
         except Exception as e:
             self.logger.error(f"Error in process_allocated_leads: {e}")
@@ -232,4 +256,45 @@ class OutreachAgent(BaseAgent):
                     return lead
         
         return None
+    
+    def check_pending_invitations(self) -> None:
+        """Check status of pending invitations (Unipile polling)."""
+        self.logger.info("Checking pending invitations")
+        
+        try:
+            filters = {"contact_status": "Invitation Sent"}
+            pending_leads = self.state_manager.read_leads(filters)
+            
+            for lead in pending_leads:
+                try:
+                    invite_id = self._extract_invite_id(lead.notes)
+                    status = self.linkedin_sender.check_invitation_status(invite_id, lead.linkedin_url)
+                    
+                    if status == "accepted":
+                        self.logger.info(f"✓ Invitation accepted: {lead.name}")
+                        
+                        # Reset to Allocated for message sending
+                        updates = {
+                            "contact_status": "Allocated",
+                            "allocated_to": "Outreach",
+                            "allocated_at": datetime.now().isoformat(),
+                            "notes": f"Invitation accepted",
+                            "last_updated": datetime.now().isoformat()
+                        }
+                        self.state_manager.update_lead(lead.id, updates)
+                        # Will be picked up on next process_allocated_leads() cycle
+                        
+                except Exception as e:
+                    self.logger.error(f"Error checking invitation {lead.id}: {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error in check_pending_invitations: {e}")
+    
+    def _extract_invite_id(self, notes: Optional[str]) -> Optional[str]:
+        """Extract invite_id from notes."""
+        if not notes:
+            return None
+        import re
+        match = re.search(r'Invite ID: ([^,]+)', notes)
+        return match.group(1) if match else None
 
