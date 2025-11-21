@@ -24,7 +24,7 @@ class OutreachAgent(BaseAgent):
         self.config_section = self.config.get("outreach", {})
         
         # Track last process time to process only new leads
-        self.last_process_time = datetime.now() - timedelta(days=1)  # Process all on first run
+        self.last_process_time = datetime.now(timezone.utc) - timedelta(days=1)  # Process all on first run
         
         # Initialize components
         self.message_generator = MessageGenerator(llm_client=self.llm_client)
@@ -100,9 +100,18 @@ class OutreachAgent(BaseAgent):
             ]
             
             # Also include newly allocated leads (for immediate processing)
+            # Normalize datetimes to timezone-aware (UTC) before comparison
+            def normalize_dt(dt: Optional[datetime]) -> Optional[datetime]:
+                if dt is None:
+                    return None
+                if dt.tzinfo is None:
+                    return dt.replace(tzinfo=timezone.utc)
+                return dt
+            
+            last_process_utc = normalize_dt(self.last_process_time)
             new_leads = [
                 lead for lead in pending_leads
-                if lead.allocated_at and lead.allocated_at > self.last_process_time
+                if lead.allocated_at and normalize_dt(lead.allocated_at) > last_process_utc
             ]
             
             if pending_leads:
@@ -190,7 +199,7 @@ class OutreachAgent(BaseAgent):
                     continue
             
             # Update last check time
-            self.last_process_time = datetime.now()
+            self.last_process_time = datetime.now(timezone.utc)
                     
         except Exception as e:
             self.logger.error(f"Error in process_allocated_leads: {e}")
