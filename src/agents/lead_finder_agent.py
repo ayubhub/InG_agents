@@ -130,6 +130,7 @@ class LeadFinderAgent(BaseAgent):
         try:
             # Read uncontacted leads
             leads = self.read_uncontacted_leads()
+            self.logger.info(f"Found {len(leads)} uncontacted leads")
             
             # Limit processing
             leads_to_process = leads[:self.max_leads_per_day]
@@ -137,15 +138,19 @@ class LeadFinderAgent(BaseAgent):
             processed = 0
             for lead in leads_to_process:
                 try:
+                    self.logger.debug(f"Processing lead {lead.id}: {lead.name} (current status: {lead.contact_status}, classification: {lead.classification}, score: {lead.quality_score})")
+                    
                     # Analyse lead
                     analysed_lead = self.analyse_lead(lead)
                     
                     # Update in Google Sheets
                     if self.update_lead_classification(analysed_lead):
                         processed += 1
-                        self.logger.debug(f"Processed lead: {lead.id} - {lead.classification} (score: {lead.quality_score})")
+                        self.logger.info(f"✓ Updated lead {lead.id}: {lead.name} -> {analysed_lead.classification} (score: {analysed_lead.quality_score})")
+                    else:
+                        self.logger.warning(f"✗ Failed to update lead {lead.id}: {lead.name}")
                     
-                    # Publish event
+                    # Publish event (deprecated, but kept for compatibility)
                     self.publish_event("lead_discovered", {
                         "agent_to": "SalesManager",
                         "lead_id": lead.id,
@@ -154,7 +159,7 @@ class LeadFinderAgent(BaseAgent):
                     })
                     
                 except Exception as e:
-                    self.logger.error(f"Error processing lead {lead.id}: {e}")
+                    self.logger.error(f"Error processing lead {lead.id}: {e}", exc_info=True)
                     continue
             
             self.logger.info(f"Processed {processed} leads")

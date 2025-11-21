@@ -86,14 +86,20 @@ class RateLimiter:
             True if can send, False otherwise
         """
         # Check daily limit
-        if self._get_daily_count() >= self.daily_limit:
+        daily_count = self._get_daily_count()
+        if daily_count >= self.daily_limit:
+            self.logger.warning(f"Daily limit reached: {daily_count}/{self.daily_limit}")
             return False
         
         # Check time window
         current_time = datetime.now().time()
-        if not (self.window_start <= current_time <= self.window_end):
+        # Handle time window (works for same-day windows like 09:00-23:59)
+        in_window = self.window_start <= current_time <= self.window_end
+        if not in_window:
+            self.logger.warning(f"Outside time window: current={current_time}, window={self.window_start}-{self.window_end}")
             return False
         
+        self.logger.debug(f"Rate limit OK: {daily_count}/{self.daily_limit}, time={current_time} in window {self.window_start}-{self.window_end}")
         return True
     
     def record_send(self) -> int:

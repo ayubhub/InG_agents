@@ -76,34 +76,48 @@ class OutreachAgent(BaseAgent):
         self.scheduler.start()
     
     def process_allocated_leads(self) -> None:
-        """Process newly allocated leads."""
+        """Process allocated leads that haven't been sent yet."""
         self.logger.info("Processing allocated leads")
         
         try:
             # Read allocated leads
             filters = {"contact_status": "Allocated", "allocated_to": "Outreach"}
             leads = self.state_manager.read_leads(filters)
+            self.logger.info(f"Found {len(leads)} allocated leads")
             
-            # Filter: only recently allocated
-            new_leads = [
+            # Filter: only leads without message_sent (haven't been processed yet)
+            pending_leads = [
                 lead for lead in leads 
+                if not lead.message_sent  # No message sent yet
+            ]
+            
+            # Also include newly allocated leads (for immediate processing)
+            new_leads = [
+                lead for lead in pending_leads
                 if lead.allocated_at and lead.allocated_at > self.last_process_time
             ]
             
-            if new_leads:
-                self.logger.info(f"⚡ Found {len(new_leads)} newly allocated leads")
+            if pending_leads:
+                self.logger.info(f"Found {len(pending_leads)} pending leads ({len(new_leads)} newly allocated)")
+            else:
+                self.logger.debug("No pending leads to process")
+                return
             
-            for lead in new_leads:
+            for lead in pending_leads:
                 try:
+                    self.logger.info(f"Processing lead {lead.id}: {lead.name} (allocated at: {lead.allocated_at})")
+                    
                     # Check rate limit
                     if not self.rate_limiter.can_send():
-                        self.logger.info("Rate limit reached, stopping for today")
+                        self.logger.warning(f"Rate limit check failed for {lead.name}. Check logs above for details.")
                         break
                     
                     # Generate message
+                    self.logger.debug(f"Generating message for {lead.name}")
                     message = self.generate_message(lead)
                     
                     # Send message
+                    self.logger.debug(f"Sending message to {lead.name} via {self.linkedin_sender.service}")
                     result = self.send_message(lead, message)
                     
                     if result.success:

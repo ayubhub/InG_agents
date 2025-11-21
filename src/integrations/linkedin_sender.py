@@ -6,7 +6,7 @@ import os
 import json
 import requests
 from typing import Optional, Dict, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from src.core.models import SendResult
 from src.utils.logger import setup_logger
 
@@ -306,19 +306,25 @@ class LinkedInSender:
         try:
             if os.path.exists(self.timestamp_cache_file):
                 with open(self.timestamp_cache_file, 'r') as f:
-                    return f.read().strip()
+                    timestamp = f.read().strip()
+                    if timestamp:
+                        return timestamp
         except Exception as e:
             self.logger.warning(f"Error reading timestamp cache: {e}")
         
-        # Default: 2 hours ago
-        return (datetime.now() - timedelta(hours=2)).isoformat()
+        # Default: 24 hours ago (conservative, to catch any missed messages)
+        # Format: ISO 8601 with UTC timezone (Unipile API format)
+        default_time = datetime.now(timezone.utc) - timedelta(hours=24)
+        return default_time.replace(microsecond=0).isoformat()
     
     def _update_last_check_timestamp(self) -> None:
         """Save current timestamp as last check time."""
         try:
             os.makedirs(os.path.dirname(self.timestamp_cache_file), exist_ok=True)
+            # Save timestamp without microseconds, with UTC timezone (Unipile API format)
+            timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
             with open(self.timestamp_cache_file, 'w') as f:
-                f.write(datetime.now().isoformat())
+                f.write(timestamp)
         except Exception as e:
             self.logger.warning(f"Error updating timestamp cache: {e}")
     
@@ -376,42 +382,113 @@ class LinkedInSender:
             return []
     
     def _check_unipile_responses(self) -> List[Dict]:
-        """Poll for new messages from Unipile API."""
+        """
+        Poll for new messages from Unipile API.
+        Unipile doesn't have a direct /messages endpoint, so we:
+        1. Get list of chats
+        2. For each chat, get messages
+        3. Filter for incoming messages (is_sender=0) since last check
+        """
         try:
             # Get timestamp of last check
-            since = self._get_last_check_timestamp()
+            since_str = self._get_last_check_timestamp()
+            # Normalize to UTC timezone-aware datetime
+            if 'Z' in since_str:
+                since_dt = datetime.fromisoformat(since_str.replace('Z', '+00:00'))
+            elif '+' in since_str or since_str.count('-') > 2:  # Has timezone
+                since_dt = datetime.fromisoformat(since_str)
+            else:  # Naive datetime, assume UTC
+                since_dt = datetime.fromisoformat(since_str).replace(tzinfo=timezone.utc)
             
-            # Request new messages
-            url = f"{self.base_url}/messages"
-            params = {
+            # Step 1: Get list of chats
+            chats_url = f"{self.base_url}/chats"
+            chats_params = {
                 "account_id": self.account_id,
-                "type": "received",
-                "since": since,
                 "limit": 100
             }
             
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
+            chats_response = requests.get(chats_url, headers=self.headers, params=chats_params, timeout=30)
             
-            messages = response.json().get("items", [])
+            if chats_response.status_code == 503:
+                self.logger.warning("Unipile API temporarily unavailable (503) when fetching chats. Will retry on next check.")
+                return []
             
-            # Transform to unified format
-            responses = []
-            for msg in messages:
-                chat_info = self._get_chat_info(msg.get("chat_id", ""))
-                responses.append({
-                    "message_id": msg.get("id"),
-                    "text": msg.get("text", ""),
-                    "linkedin_url": chat_info.get("sender_linkedin_url", ""),
-                    "timestamp": msg.get("date")
-                })
+            chats_response.raise_for_status()
+            chats = chats_response.json().get("items", [])
             
-            # Update last check timestamp
-            if messages:
+            # Step 2: Get messages for each chat and filter for new incoming messages
+            all_responses = []
+            
+            for chat in chats:
+                chat_id = chat.get("id")
+                if not chat_id:
+                    continue
+                
+                try:
+                    # Get messages for this chat
+                    messages_url = f"{self.base_url}/chats/{chat_id}/messages"
+                    messages_params = {
+                        "account_id": self.account_id,
+                        "limit": 50  # Get recent messages per chat
+                    }
+                    
+                    messages_response = requests.get(messages_url, headers=self.headers, params=messages_params, timeout=30)
+                    
+                    if messages_response.status_code == 503:
+                        self.logger.warning(f"Unipile API temporarily unavailable (503) for chat {chat_id}. Skipping.")
+                        continue
+                    
+                    messages_response.raise_for_status()
+                    messages = messages_response.json().get("items", [])
+                    
+                    # Filter for incoming messages (is_sender=0) that are newer than last check
+                    for msg in messages:
+                        if msg.get("is_sender") == 0:  # Incoming message
+                            msg_timestamp_str = msg.get("timestamp", "")
+                            if msg_timestamp_str:
+                                try:
+                                    # Normalize message timestamp to UTC timezone-aware datetime
+                                    if 'Z' in msg_timestamp_str:
+                                        msg_dt = datetime.fromisoformat(msg_timestamp_str.replace('Z', '+00:00'))
+                                    elif '+' in msg_timestamp_str or msg_timestamp_str.count('-') > 2:  # Has timezone
+                                        msg_dt = datetime.fromisoformat(msg_timestamp_str)
+                                    else:  # Naive datetime, assume UTC
+                                        msg_dt = datetime.fromisoformat(msg_timestamp_str).replace(tzinfo=timezone.utc)
+                                    
+                                    if msg_dt > since_dt:
+                                        # Get sender LinkedIn URL
+                                        # sender_id is LinkedIn profile ID (e.g., "ACoAAASCRCQBFAgCKtUUV5UTjIoiFVUEYIBMdDE")
+                                        sender_id = msg.get("sender_id", "")
+                                        linkedin_url = f"https://www.linkedin.com/in/{sender_id}/" if sender_id else ""
+                                        
+                                        all_responses.append({
+                                            "message_id": msg.get("id"),
+                                            "text": msg.get("text", ""),
+                                            "linkedin_url": linkedin_url,
+                                            "timestamp": msg_timestamp_str
+                                        })
+                                except (ValueError, TypeError) as e:
+                                    self.logger.warning(f"Error parsing message timestamp: {e}")
+                                    continue
+                
+                except requests.exceptions.HTTPError as e:
+                    if e.response.status_code != 503:
+                        self.logger.warning(f"Error fetching messages for chat {chat_id}: {e}")
+                    continue
+                except Exception as e:
+                    self.logger.warning(f"Error processing chat {chat_id}: {e}")
+                    continue
+            
+            # Update last check timestamp only if we got successful responses
+            if all_responses:
                 self._update_last_check_timestamp()
             
-            return responses
+            return all_responses
             
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code != 503:
+                self.logger.error(f"HTTP error checking Unipile responses: {e}")
+            return []
         except Exception as e:
             self.logger.error(f"Error checking Unipile responses: {e}")
             return []

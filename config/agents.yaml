@@ -28,7 +28,7 @@ outreach:
   rate_limit_daily: 45
   rate_limit_interval: "5-15 minutes"  # Production
   # rate_limit_interval: "1-2 minutes"  # Testing (uncomment)
-  rate_limit_window: "09:00-18:00"
+  rate_limit_window: "00:00-23:59"  # Full day for testing (was: 09:00-18:00)
   process_interval_minutes: 2  # Check for allocated leads every 2 minutes
   response_check_interval_hours: 2  # Production
   # response_check_interval_hours: 1  # Testing (uncomment)

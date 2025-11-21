@@ -69,11 +69,17 @@ class SalesManagerAgent(BaseAgent):
             }
             leads = self.state_manager.read_leads(filters)
             
+            # Log all found leads for debugging
+            if leads:
+                self.logger.debug(f"Found classified leads: {[(l.id, l.name, l.classification, l.quality_score, l.contact_status) for l in leads]}")
+            
             # Filter: only leads updated since last coordination
             new_leads = [
                 lead for lead in leads 
                 if lead.last_updated and lead.last_updated > self.last_coordination_time
             ]
+            
+            self.logger.info(f"Found {len(leads)} classified leads, {len(new_leads)} new since last check (last_coordination_time: {self.last_coordination_time})")
             
             if new_leads:
                 self.logger.info(f"⚡ Found {len(new_leads)} newly classified leads")
@@ -82,6 +88,7 @@ class SalesManagerAgent(BaseAgent):
                 lead_finder_config = self.config.get("lead_finder", {})
                 quality_threshold = lead_finder_config.get("quality_threshold", 6.0)
                 
+                allocated_count = 0
                 for lead in new_leads:
                     # Allocation logic
                     if lead.quality_score and lead.quality_score >= quality_threshold:
@@ -91,7 +98,16 @@ class SalesManagerAgent(BaseAgent):
                             "allocated_at": datetime.now().isoformat(),
                             "last_updated": datetime.now().isoformat()
                         }
-                        self.state_manager.update_lead(lead.id, updates)
+                        if self.state_manager.update_lead(lead.id, updates):
+                            allocated_count += 1
+                            self.logger.info(f"✓ Allocated lead {lead.id}: {lead.name} (score: {lead.quality_score})")
+                        else:
+                            self.logger.warning(f"✗ Failed to allocate lead {lead.id}: {lead.name}")
+                    else:
+                        self.logger.debug(f"Skipped lead {lead.id}: score {lead.quality_score} < threshold {quality_threshold}")
+                
+                if allocated_count > 0:
+                    self.logger.info(f"Allocated {allocated_count} leads to Outreach")
             
             # Update last check time
             self.last_coordination_time = datetime.now()

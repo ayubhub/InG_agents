@@ -108,14 +108,19 @@ class GoogleSheetsIO:
             headers = self.leads_sheet.row_values(1)
             
             # Update fields
+            updated_fields = []
             for field, value in updates.items():
                 header_name = self._resolve_header(field, headers)
                 if not header_name:
-                    self.logger.warning(f"Unknown field '{field}' - skipping update for lead {lead_id}")
+                    self.logger.warning(f"Unknown field '{field}' - skipping update for lead {lead_id}. Available headers: {headers}")
                     continue
                 
                 col_index = headers.index(header_name) + 1  # gspread uses 1-based indexing
                 self.leads_sheet.update_cell(row, col_index, value)
+                updated_fields.append(f"{header_name}={value}")
+            
+            if updated_fields:
+                self.logger.info(f"✓ Updated lead {lead_id}: {', '.join(updated_fields)}")
             
             return True
             
@@ -128,7 +133,15 @@ class GoogleSheetsIO:
         for key, expected_value in filters.items():
             value = getattr(lead, key, None)
             
-            if isinstance(expected_value, str):
+            # Support list of values (OR condition)
+            if isinstance(expected_value, list):
+                if not any(
+                    (str(value or "").strip().lower() == str(ev).strip().lower() if isinstance(ev, str)
+                     else value == ev)
+                    for ev in expected_value
+                ):
+                    return False
+            elif isinstance(expected_value, str):
                 if (value or "").strip().lower() != expected_value.strip().lower():
                     return False
             else:
