@@ -107,7 +107,7 @@ Sales Mgr  Lead Finder  Outreach  (Agents)
 **Flow**:
 1. Lead Finder: `Not Contacted` → classify → `Not Contacted` (but with Classification)
 2. Sales Manager: checks `last_updated` → allocates → `Allocated`
-3. Outreach: checks `allocated_at` → sends → `Message Sent`
+3. Outreach: checks `allocated_at` → sends invitation (if user not in contacts) → `Invitation Sent` → waits for acceptance → `Allocated` → sends message → `Message Sent`
 
 **Benefits**:
 - ✅ Simple: one mechanism (Sheets)

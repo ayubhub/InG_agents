@@ -88,7 +88,7 @@ AI-powered sales department with three specialised agents: **Sales Manager Agent
 ### UC-03: Outreach - Generate and Send Messages
 **Actor**: Outreach Agent
 
-**Flow**: Get allocated leads → Generate personalised messages (LLM) → Check rate limiter → Send via LinkedIn → Log actions
+**Flow**: Get allocated leads → Check if user in contacts → If not: Get LinkedIn ID → Send invitation → Update status to "Invitation Sent" → Wait for acceptance → If accepted or already in contacts: Generate personalised messages (LLM) → Check rate limiter → Send via LinkedIn → Log actions
 
 **Rate Limiting** (from requirements):
 - 30-50 messages per day

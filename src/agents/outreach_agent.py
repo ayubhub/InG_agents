@@ -3,7 +3,7 @@ Outreach Agent - Sends messages and monitors responses.
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -120,12 +120,26 @@ class OutreachAgent(BaseAgent):
                     self.logger.debug(f"Sending message to {lead.name} via {self.linkedin_sender.service}")
                     result = self.send_message(lead, message)
                     
-                    if result.success:
+                    # Check invitation sent first (success=False but status='invitation_sent')
+                    if result.status == "invitation_sent":
+                        updates = {
+                            "contact_status": "Invitation Sent",
+                            "message_sent": message[:300] if len(message) > 300 else message,  # Truncated invitation message
+                            "message_sent_at": result.timestamp.isoformat() if result.timestamp else datetime.now(timezone.utc).isoformat(),
+                            "notes": f"Invitation ID: {result.message_id}, Waiting for acceptance. URL: {lead.linkedin_url}",
+                            "last_updated": datetime.now(timezone.utc).isoformat()
+                        }
+                        self.state_manager.update_lead(lead.id, updates)
+                        self.logger.info(f"→ Invitation sent to {lead.name} (ID: {result.message_id})")
+                        wait_time = self.rate_limiter.record_send()
+                        time.sleep(wait_time)
+                        
+                    elif result.success:
                         updates = {
                             "contact_status": "Message Sent",
                             "message_sent": message,
-                            "message_sent_at": datetime.now().isoformat(),
-                            "last_updated": datetime.now().isoformat()
+                            "message_sent_at": result.timestamp.isoformat() if result.timestamp else datetime.now(timezone.utc).isoformat(),
+                            "last_updated": datetime.now(timezone.utc).isoformat()
                         }
                         self.state_manager.update_lead(lead.id, updates)
                         
@@ -133,16 +147,15 @@ class OutreachAgent(BaseAgent):
                         self.logger.info(f"✓ Message sent to {lead.name}")
                         time.sleep(wait_time)
                         
-                    elif result.status == "invitation_sent":
+                    else:
+                        # Failed to send
+                        error_note = f"Failed: {result.error_message}" if result.error_message else "Unknown error"
                         updates = {
-                            "contact_status": "Invitation Sent",
-                            "notes": f"Invite ID: {result.message_id}, URL: {lead.linkedin_url}",
-                            "last_updated": datetime.now().isoformat()
+                            "contact_status": "Allocated",  # Keep as allocated to retry later
+                            "notes": error_note,
+                            "last_updated": datetime.now(timezone.utc).isoformat()
                         }
                         self.state_manager.update_lead(lead.id, updates)
-                        self.logger.info(f"→ Invitation sent to {lead.name}")
-                        
-                    else:
                         self.logger.error(f"Failed to send message to {lead.name}: {result.error_message}")
                         
                 except RateLimitExceededError:
@@ -284,6 +297,8 @@ class OutreachAgent(BaseAgent):
                     invite_id = self._extract_invite_id(lead.notes)
                     status = self.linkedin_sender.check_invitation_status(invite_id, lead.linkedin_url)
                     
+                    now = datetime.now(timezone.utc)
+                    
                     if status == "accepted":
                         self.logger.info(f"✓ Invitation accepted: {lead.name}")
                         
@@ -291,12 +306,33 @@ class OutreachAgent(BaseAgent):
                         updates = {
                             "contact_status": "Allocated",
                             "allocated_to": "Outreach",
-                            "allocated_at": datetime.now().isoformat(),
-                            "notes": f"Invitation accepted",
-                            "last_updated": datetime.now().isoformat()
+                            "allocated_at": now.isoformat(),
+                            "notes": f"Invitation accepted at {now.isoformat()}. Ready to send message.",
+                            "last_updated": now.isoformat()
                         }
                         self.state_manager.update_lead(lead.id, updates)
+                        self.logger.info(f"→ Lead {lead.id} ready for message sending")
                         # Will be picked up on next process_allocated_leads() cycle
+                        
+                    elif status == "declined":
+                        self.logger.warning(f"Invitation declined: {lead.name}")
+                        updates = {
+                            "contact_status": "Failed",
+                            "notes": f"Invitation declined at {now.isoformat()}",
+                            "last_updated": now.isoformat()
+                        }
+                        self.state_manager.update_lead(lead.id, updates)
+                        
+                    elif status == "expired":
+                        self.logger.warning(f"Invitation expired: {lead.name}")
+                        updates = {
+                            "contact_status": "Allocated",  # Retry invitation
+                            "notes": f"Invitation expired at {now.isoformat()}. Will retry.",
+                            "last_updated": now.isoformat()
+                        }
+                        self.state_manager.update_lead(lead.id, updates)
+                        
+                    # If status is "pending", no update needed - will check again next time
                         
                 except Exception as e:
                     self.logger.error(f"Error checking invitation {lead.id}: {e}")
@@ -309,6 +345,13 @@ class OutreachAgent(BaseAgent):
         if not notes:
             return None
         import re
-        match = re.search(r'Invite ID: ([^,]+)', notes)
-        return match.group(1) if match else None
+        # Try new format: "Invitation ID: ..."
+        match = re.search(r'Invitation ID: ([^,\n]+)', notes)
+        if match:
+            return match.group(1).strip()
+        # Try old format: "Invite ID: ..."
+        match = re.search(r'Invite ID: ([^,\n]+)', notes)
+        if match:
+            return match.group(1).strip()
+        return None
 

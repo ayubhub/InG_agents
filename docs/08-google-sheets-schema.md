@@ -32,7 +32,7 @@ Detailed schema for Google Sheets used as primary database. Includes exact colum
 | **LinkedIn URL** | URL | Yes | LinkedIn profile URL | `https://linkedin.com/in/johndoe` |
 | **Classification** | Text | No | Auto-classified: `Speaker`, `Sponsor`, `Other` | `Speaker` |
 | **Quality Score** | Number | No | Score 1-10 (calculated) | `7.5` |
-| **Contact Status** | Text | Yes | Status: `Not Contacted`, `Allocated`, `Message Sent`, `Responded`, `Closed` | `Not Contacted` |
+| **Contact Status** | Text | Yes | Status: `Not Contacted`, `Allocated`, `Invitation Sent`, `Message Sent`, `Responded`, `Closed`, `Failed` | `Not Contacted` |
 | **Allocated To** | Text | No | Agent name if allocated | `Outreach` |
 | **Allocated At** | DateTime | No | When lead was allocated | `2025-01-15 09:30:00` |
 | **Message Sent** | Text | No | Message text sent to lead | `Hi John! We're organising...` |
@@ -48,11 +48,23 @@ Detailed schema for Google Sheets used as primary database. Includes exact colum
 ### Data Validation Rules
 
 1. **LinkedIn URL**: Must be valid LinkedIn URL format
-2. **Contact Status**: Must be one of: `Not Contacted`, `Allocated`, `Message Sent`, `Responded`, `Closed`
+2. **Contact Status**: Must be one of: `Not Contacted`, `Allocated`, `Invitation Sent`, `Message Sent`, `Responded`, `Closed`, `Failed`
 3. **Classification**: Must be one of: `Speaker`, `Sponsor`, `Other` (or empty)
 4. **Quality Score**: Must be between 1.0 and 10.0 (or empty)
 5. **Response Sentiment**: Must be one of: `positive`, `negative`, `neutral` (or empty)
 6. **Response Intent**: Must be one of: `interested`, `not_interested`, `requesting_info` (or empty)
+
+### Contact Status Values
+
+| Status | Description | When Set | Next Action |
+|--------|-------------|----------|-------------|
+| `Not Contacted` | Lead has not been processed yet | Initial state, or when lead is first added | Lead Finder will classify and score |
+| `Allocated` | Lead has been assigned to Outreach agent | Sales Manager allocates based on quality score | Outreach will attempt to send invitation or message |
+| `Invitation Sent` | LinkedIn invitation has been sent, waiting for acceptance | Outreach sends invitation via Unipile API | Outreach polls for acceptance (every 2 hours) |
+| `Message Sent` | Message has been successfully sent to lead | Outreach sends message after invitation accepted or if already connected | Outreach monitors for responses |
+| `Responded` | Lead has responded to the message | Outreach detects response and analyzes it | Sales Manager may review response |
+| `Closed` | Lead interaction is complete (won, lost, or no longer relevant) | Manual update or automated based on response | No further action |
+| `Failed` | Failed to send message or invitation was declined | Error during sending or invitation declined | May retry or mark as closed |
 
 ### Example Row
 
@@ -76,6 +88,30 @@ Response Intent: (empty)
 Created At: 2025-01-15 08:00:00
 Last Updated: 2025-01-15 10:15:00
 Notes: (empty)
+```
+
+**Example Row with Invitation Sent:**
+
+```
+Lead ID: lead_002
+Name: Jane Smith
+Position: CEO
+Company: Startup Inc
+LinkedIn URL: https://linkedin.com/in/janesmith
+Classification: Sponsor
+Quality Score: 8.5
+Contact Status: Invitation Sent
+Allocated To: Outreach
+Allocated At: 2025-01-15 09:30:00
+Message Sent: Hi Jane, We're hosting an Innovators Guild event on 2025-11-20 - a curated gathering of the most ambitious engineers, founders, and innovators building the future. Your work at Startup Inc leading CEO is exactly the kind of perspective our community needs to hear. I think you'd be a perfect fit. Interested in speaking? Best, Ayub Innovators Guild https://innovators.london
+Message Sent At: 2025-01-15 10:00:00
+Response: (empty)
+Response Received At: (empty)
+Response Sentiment: (empty)
+Response Intent: (empty)
+Created At: 2025-01-15 08:00:00
+Last Updated: 2025-01-15 10:00:00
+Notes: Invitation ID: 7397677423577796608, Waiting for acceptance. URL: https://linkedin.com/in/janesmith
 ```
 
 ---
@@ -121,7 +157,7 @@ Notes: (empty)
    - **LinkedIn URL**: Hyperlink
    - **Classification**: Dropdown (Speaker, Sponsor, Other)
    - **Quality Score**: Number (1 decimal place)
-   - **Contact Status**: Dropdown (Not Contacted, Allocated, Message Sent, Responded, Closed)
+   - **Contact Status**: Dropdown (Not Contacted, Allocated, Invitation Sent, Message Sent, Responded, Closed, Failed)
    - **Allocated To**: Text
    - **Allocated At**: Date time
    - **Message Sent**: Text

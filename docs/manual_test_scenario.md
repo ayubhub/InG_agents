@@ -51,11 +51,21 @@ python main.py
 - Поле **Allocated To** заполнено (например, `Outreach`).
 - Поле **Allocated At** заполнено текущим временем.
 
-### Шаг 4: Запуск Outreach Agent (Генерация сообщения)
+### Шаг 4: Запуск Outreach Agent (Отправка приглашения или сообщения)
 Outreach агент постоянно мониторит очередь.
 
-**Проверка в Google Sheet:**
-- Поле **Contact Status** изменилось на `Message Sent` (или `Queued` если есть задержка).
+**Если пользователь не в контактах LinkedIn:**
+- Поле **Contact Status** изменилось на `Invitation Sent`.
+- Поле **Message Sent** заполнилось текстом приглашения (обрезано до 300 символов).
+- Поле **Message Sent At** заполнено временем отправки приглашения.
+- Поле **Notes** содержит: `Invitation ID: {invite_id}, Waiting for acceptance. URL: {linkedin_url}`.
+
+**После принятия приглашения:**
+- Поле **Contact Status** изменилось на `Allocated` (готово к отправке сообщения).
+- Поле **Notes** обновлено: `Invitation accepted at {timestamp}. Ready to send message.`
+
+**Если пользователь уже в контактах или приглашение принято:**
+- Поле **Contact Status** изменилось на `Message Sent`.
 - Поле **Message Sent** заполнилось текстом сообщения.
 - Текст сообщения должен быть персонализирован (содержать имя, компанию, позицию).
 

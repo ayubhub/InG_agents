@@ -125,7 +125,7 @@ class Lead:
     linkedin_url: str
     classification: Optional[str]  # "Speaker", "Sponsor", "Other"
     quality_score: Optional[float]  # 1-10
-    contact_status: str  # "Not Contacted", "Allocated", "Message Sent", "Responded"
+    contact_status: str  # "Not Contacted", "Allocated", "Invitation Sent", "Message Sent", "Responded", "Closed", "Failed"
     message_sent: Optional[str]
     response: Optional[str]
     response_sentiment: Optional[str]  # "positive", "negative", "neutral"

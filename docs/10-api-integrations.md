@@ -356,9 +356,15 @@ return SendResult(
     message_id=invite_id,
     status='invitation_sent'
 )
+
+# Update Google Sheets:
+# - Contact Status: "Invitation Sent"
+# - Message Sent: invitation message (truncated to 300 chars)
+# - Message Sent At: timestamp
+# - Notes: "Invitation ID: {invite_id}, Waiting for acceptance. URL: {linkedin_url}"
 ```
 
-**3. Check invitation status (polling, every 6 hours)**
+**3. Check invitation status (polling, every 2 hours)**
 
 ```python
 # Re-search for user to see if now connected
@@ -366,6 +372,11 @@ user = find_user_by_linkedin_url(linkedin_url)
 if user and user.get("connection_status") == "connected":
     return "accepted"
 return "pending"
+
+# When invitation is accepted, update Google Sheets:
+# - Contact Status: "Allocated" (ready to send message)
+# - Notes: "Invitation accepted at {timestamp}. Ready to send message."
+# Lead will be picked up by process_allocated_leads() on next cycle
 ```
 
 **4. Create or find chat**

@@ -266,6 +266,7 @@ class GoogleSheetsIO:
             valid_statuses = {
                 "Not Contacted",
                 "Allocated",
+                "Invitation Sent",
                 "Message Sent",
                 "Responded",
                 "Closed",

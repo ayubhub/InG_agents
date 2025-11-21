@@ -140,21 +140,61 @@ class LinkedInSender:
     def _send_via_unipile(self, linkedin_url: str, message: str) -> SendResult:
         """
         Send message via Unipile API.
-        Handles: user search → invite (if needed) → create chat → send message
+        Strategy: 
+        1. Try to find existing chat (user in contacts)
+        2. If not found, try to send invitation
+        3. If invitation sent, return status (message will be sent after invitation accepted)
         """
         try:
-            # Step 1: Search for user in contacts
-            user = self._find_unipile_user(linkedin_url)
+            # Step 1: Try to find existing chat (user must be in contacts)
+            existing_chat = self._find_unipile_user_in_chats(linkedin_url)
             
-            if not user:
-                # User not in contacts → send invitation
-                return self._send_unipile_invitation(linkedin_url, message)
-            
-            # Step 2: Create or find chat
-            chat_id = self._get_or_create_chat(user["id"])
-            
-            # Step 3: Send message
-            return self._send_unipile_message(chat_id, message)
+            if existing_chat:
+                chat_id = existing_chat["id"]
+                provider_id = existing_chat.get("provider_id", "")
+                self.logger.info(f"Found existing chat {chat_id} for {provider_id}")
+                # Step 2: Send message to existing chat
+                return self._send_unipile_message(chat_id, message)
+            else:
+                # User not in contacts - try to get LinkedIn ID and send invitation
+                self.logger.info(f"User not in contacts for {linkedin_url}, attempting to get LinkedIn ID and send invitation")
+                
+                # Step 1: Try to get full LinkedIn ID via profile lookup
+                linkedin_id = self._get_linkedin_id_by_identifier(linkedin_url)
+                
+                if linkedin_id:
+                    # Step 2: Send invitation with full LinkedIn ID
+                    self.logger.info(f"Found LinkedIn ID {linkedin_id} for {linkedin_url}, sending invitation")
+                    try:
+                        return self._send_unipile_invitation(linkedin_id, message)
+                    except Exception as invite_error:
+                        error_msg = (
+                            f"Failed to send invitation. LinkedIn URL: {linkedin_url}, ID: {linkedin_id}. "
+                            f"Error: {invite_error}"
+                        )
+                        self.logger.error(error_msg)
+                        return SendResult(
+                            success=False,
+                            error_message=error_msg,
+                            timestamp=datetime.now(),
+                            service_used='unipile',
+                            status='invitation_failed'
+                        )
+                else:
+                    # Could not find LinkedIn ID via search
+                    error_msg = (
+                        f"Could not find LinkedIn ID for URL: {linkedin_url}. "
+                        f"User may not be searchable or may not exist. "
+                        f"Please ensure the LinkedIn URL is correct or send invitation manually through Unipile dashboard."
+                    )
+                    self.logger.warning(error_msg)
+                    return SendResult(
+                        success=False,
+                        error_message=error_msg,
+                        timestamp=datetime.now(),
+                        service_used='unipile',
+                        status='user_not_found'
+                    )
             
         except Exception as e:
             self.logger.error(f"Unipile send error: {e}")
@@ -165,49 +205,180 @@ class LinkedInSender:
                 service_used='unipile'
             )
     
-    def _find_unipile_user(self, linkedin_url: str) -> Optional[Dict]:
-        """Search for user in Unipile contacts by LinkedIn URL."""
+    def _extract_linkedin_provider_id(self, linkedin_url: str) -> Optional[str]:
+        """Extract LinkedIn provider_id from URL."""
+        # LinkedIn URL format: https://www.linkedin.com/in/{username}/
+        # or https://www.linkedin.com/in/{username}
+        import re
+        match = re.search(r'/in/([^/?]+)', linkedin_url)
+        if match:
+            return match.group(1)
+        return None
+    
+    def _get_linkedin_id_by_identifier(self, linkedin_url: str) -> Optional[str]:
+        """
+        Get full LinkedIn ID by retrieving user profile via Unipile API.
+        Uses /api/v1/users/{identifier} endpoint where identifier can be public_identifier (username).
+        
+        This is the recommended approach as it uses the exact username from URL.
+        """
         try:
-            url = f"{self.base_url}/users"
+            # Extract username from URL
+            username = self._extract_linkedin_provider_id(linkedin_url)
+            if not username:
+                return None
+            
+            # Use /api/v1/users/{identifier} endpoint
+            # According to API schema, identifier can be provider's internal id OR public id (username)
+            url = f"{self.base_url}/users/{username}"
+            params = {
+                "account_id": self.account_id
+            }
+            
+            self.logger.debug(f"Fetching LinkedIn profile for username: {username}")
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            
+            if response.status_code == 404:
+                self.logger.warning(f"User not found: {username}")
+                return None
+            
+            response.raise_for_status()
+            
+            result = response.json()
+            provider_id = result.get("provider_id")
+            public_identifier = result.get("public_identifier", "")
+            
+            if provider_id:
+                # Verify that public_identifier matches our username
+                if public_identifier == username:
+                    self.logger.info(f"✓ Found LinkedIn ID {provider_id} for {username}")
+                    return provider_id
+                else:
+                    self.logger.warning(
+                        f"Found LinkedIn ID {provider_id} for {username}, "
+                        f"but public_identifier is '{public_identifier}' - using anyway"
+                    )
+                    return provider_id
+            
+            return None
+            
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                self.logger.warning(f"User profile not found for {linkedin_url}")
+            else:
+                self.logger.warning(f"HTTP error getting LinkedIn ID: {e}")
+            return None
+        except Exception as e:
+            self.logger.warning(f"Error getting LinkedIn ID: {e}")
+            return None
+    
+    def _find_unipile_user_in_chats(self, linkedin_url: str) -> Optional[Dict]:
+        """Search for user in existing chats by LinkedIn URL."""
+        try:
+            # Get all chats and check attendees
+            url = f"{self.base_url}/chats"
             params = {
                 "account_id": self.account_id,
-                "provider": "LINKEDIN"
+                "limit": 100
             }
             
             response = requests.get(url, headers=self.headers, params=params, timeout=30)
             response.raise_for_status()
             
-            users = response.json().get("items", [])
+            chats = response.json().get("items", [])
             
-            # Try to find user by LinkedIn URL match
-            for user in users:
-                user_url = user.get("provider_id", "")
-                if linkedin_url in user_url or user_url in linkedin_url:
-                    return user
+            # Normalize LinkedIn URL for comparison
+            linkedin_url_normalized = linkedin_url.lower().rstrip('/')
             
+            # Search in chats for matching attendee
+            # attendee_provider_id can be either username or full LinkedIn ID
+            for chat in chats:
+                attendee_provider_id = chat.get("attendee_provider_id", "")
+                if not attendee_provider_id:
+                    continue
+                
+                # Check if LinkedIn URL contains the provider_id or vice versa
+                # Also check if provider_id is part of the LinkedIn URL path
+                if (attendee_provider_id.lower() in linkedin_url_normalized or 
+                    linkedin_url_normalized.endswith(f"/{attendee_provider_id.lower()}/") or
+                    linkedin_url_normalized.endswith(f"/{attendee_provider_id.lower()}")):
+                    return {
+                        "id": chat.get("id"),
+                        "provider_id": attendee_provider_id
+                    }
+            
+            self.logger.debug(f"User not found in existing chats for {linkedin_url}")
             return None
             
         except Exception as e:
-            self.logger.warning(f"Error finding Unipile user: {e}")
+            self.logger.warning(f"Error finding user in chats: {e}")
             return None
     
-    def _send_unipile_invitation(self, linkedin_url: str, message: str) -> SendResult:
-        """Send LinkedIn invitation via Unipile."""
+    def _send_unipile_invitation(self, provider_id: str, message: str) -> SendResult:
+        """
+        Send LinkedIn invitation via Unipile using provider_id (full LinkedIn ID).
+        
+        Args:
+            provider_id: Full LinkedIn ID (e.g., ACoAAE7X2j4BhlsL3pPOcNuKUT6f5DQ5XhOvoHI)
+            message: Invitation message (will be truncated to 300 chars if longer)
+        
+        Returns:
+            SendResult with status='invitation_sent' if successful
+        """
         try:
+            # Truncate message to 250 characters (Unipile API limit is 300, but we use 250 for safety)
+            # Some APIs count newlines or special characters differently
+            max_length = 250
+            if len(message) > max_length:
+                original_length = len(message)
+                # Truncate to leave room for ellipsis, try to break at word boundary
+                truncated = message[:max_length - 3]
+                # Find last space to avoid breaking words
+                last_space = truncated.rfind(' ')
+                if last_space > max_length - 20:  # Only use word boundary if it's not too far back
+                    truncated = truncated[:last_space]
+                message = truncated.rstrip() + "..."
+                final_length = len(message)
+                self.logger.warning(
+                    f"Invitation message truncated from {original_length} to {final_length} characters"
+                )
+            
             url = f"{self.base_url}/users/invite"
             payload = {
                 "account_id": self.account_id,
-                "linkedin_url": linkedin_url,
+                "provider_id": provider_id,
                 "message": message
             }
             
+            self.logger.info(f"Attempting to send invitation to provider_id: {provider_id}")
             response = requests.post(url, json=payload, headers=self.headers, timeout=30)
+            
+            if response.status_code == 400:
+                error_detail = response.json().get("detail", "")
+                self.logger.warning(f"Invitation failed (400): {error_detail}")
+                
+                # Check if error is about message length
+                if "length" in error_detail.lower() or "300" in error_detail:
+                    raise ValueError(
+                        f"Cannot send invitation: message is too long (max 300 chars). "
+                        f"Error: {error_detail}"
+                    )
+                
+                # Check if error is about provider_id format
+                if "format" in error_detail.lower() or "invalid" in error_detail.lower():
+                    raise ValueError(
+                        f"Cannot send invitation: provider_id format issue. "
+                        f"Error: {error_detail}"
+                    )
+                
+                raise ValueError(f"Cannot send invitation: {error_detail}")
+            
             response.raise_for_status()
             
             result = response.json()
             invite_id = result.get("id", result.get("invite_id", ""))
             
-            self.logger.info(f"Invitation sent via Unipile: {invite_id}")
+            self.logger.info(f"✓ Invitation sent via Unipile: {invite_id}")
             
             return SendResult(
                 success=False,  # Not a message send, just invitation
@@ -221,17 +392,25 @@ class LinkedInSender:
             self.logger.error(f"Error sending Unipile invitation: {e}")
             raise
     
-    def _get_or_create_chat(self, user_id: str) -> str:
-        """Get existing chat or create new one with user."""
+    def _get_or_create_chat_by_provider_id(self, provider_id: str) -> str:
+        """Create new chat with user by LinkedIn provider_id."""
         try:
             url = f"{self.base_url}/chats"
             payload = {
                 "account_id": self.account_id,
-                "attendees_ids": [user_id],
+                "attendees_ids": [provider_id],
                 "provider": "LINKEDIN"
             }
             
+            self.logger.debug(f"Creating chat with provider_id: {provider_id}")
             response = requests.post(url, json=payload, headers=self.headers, timeout=30)
+            
+            if response.status_code == 400:
+                error_detail = response.json().get("detail", "")
+                self.logger.warning(f"Chat creation failed: {error_detail}")
+                # User not in contacts, need to send invitation first
+                raise ValueError(f"Cannot create chat: user {provider_id} not in contacts")
+            
             response.raise_for_status()
             
             result = response.json()
@@ -240,11 +419,24 @@ class LinkedInSender:
             if not chat_id:
                 raise ValueError("No chat_id returned from Unipile")
             
+            self.logger.info(f"Created chat {chat_id} for provider_id {provider_id}")
             return chat_id
             
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 400:
+                error_detail = e.response.json().get("detail", "")
+                # User not in contacts, need to send invitation first
+                self.logger.warning(f"User {provider_id} not in contacts: {error_detail}")
+                raise ValueError(f"Cannot create chat: user {provider_id} not in contacts")
+            raise
         except Exception as e:
             self.logger.error(f"Error creating Unipile chat: {e}")
             raise
+    
+    def _send_invitation_and_wait(self, provider_id: str) -> str:
+        """Send invitation and return a placeholder chat_id (invitation needs to be accepted first)."""
+        # For now, raise an error - invitation needs to be handled separately
+        raise ValueError(f"User {provider_id} not in contacts. Please send LinkedIn invitation first through Unipile dashboard.")
     
     def _send_unipile_message(self, chat_id: str, message: str) -> SendResult:
         """Send message to Unipile chat."""
