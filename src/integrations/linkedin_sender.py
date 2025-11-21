@@ -520,7 +520,11 @@ class LinkedInSender:
             response.raise_for_status()
             
             result = response.json()
-            message_id = result.get("id")
+            # API returns "message_id" field (not "id")
+            message_id = result.get("message_id") or result.get("id")
+            
+            if not message_id:
+                self.logger.warning(f"Unipile API response missing message_id: {result}")
             
             self.logger.info(f"Message sent via Unipile: {message_id}")
             
@@ -659,6 +663,7 @@ class LinkedInSender:
         try:
             # Get timestamp of last check
             since_str = self._get_last_check_timestamp()
+            self.logger.debug(f"Checking for responses since: {since_str}")
             # Normalize to UTC timezone-aware datetime
             if 'Z' in since_str:
                 since_dt = datetime.fromisoformat(since_str.replace('Z', '+00:00'))
@@ -674,6 +679,7 @@ class LinkedInSender:
                 "limit": 100
             }
             
+            self.logger.debug(f"Fetching chats from Unipile API...")
             chats_response = requests.get(chats_url, headers=self.headers, params=chats_params, timeout=30)
             
             if chats_response.status_code == 503:
@@ -682,9 +688,11 @@ class LinkedInSender:
             
             chats_response.raise_for_status()
             chats = chats_response.json().get("items", [])
+            self.logger.info(f"Found {len(chats)} chats in Unipile")
             
             # Step 2: Get messages for each chat and filter for new incoming messages
             all_responses = []
+            total_messages_checked = 0
             
             for chat in chats:
                 chat_id = chat.get("id")
@@ -707,10 +715,14 @@ class LinkedInSender:
                     
                     messages_response.raise_for_status()
                     messages = messages_response.json().get("items", [])
+                    total_messages_checked += len(messages)
                     
                     # Filter for incoming messages (is_sender=0) that are newer than last check
+                    incoming_count = 0
+                    new_incoming_count = 0
                     for msg in messages:
                         if msg.get("is_sender") == 0:  # Incoming message
+                            incoming_count += 1
                             msg_timestamp_str = msg.get("timestamp", "")
                             if msg_timestamp_str:
                                 try:
@@ -723,6 +735,7 @@ class LinkedInSender:
                                         msg_dt = datetime.fromisoformat(msg_timestamp_str).replace(tzinfo=timezone.utc)
                                     
                                     if msg_dt > since_dt:
+                                        new_incoming_count += 1
                                         # Get sender LinkedIn URL
                                         # sender_id is LinkedIn profile ID (e.g., "ACoAAASCRCQBFAgCKtUUV5UTjIoiFVUEYIBMdDE")
                                         sender_id = msg.get("sender_id", "")
@@ -737,6 +750,9 @@ class LinkedInSender:
                                 except (ValueError, TypeError) as e:
                                     self.logger.warning(f"Error parsing message timestamp: {e}")
                                     continue
+                    
+                    if incoming_count > 0:
+                        self.logger.debug(f"Chat {chat_id}: {incoming_count} incoming messages, {new_incoming_count} new since {since_dt}")
                 
                 except requests.exceptions.HTTPError as e:
                     if e.response.status_code != 503:
@@ -749,6 +765,12 @@ class LinkedInSender:
             # Update last check timestamp only if we got successful responses
             if all_responses:
                 self._update_last_check_timestamp()
+            
+            self.logger.info(
+                f"Response check completed: {len(chats)} chats checked, "
+                f"{total_messages_checked} messages checked, "
+                f"{len(all_responses)} new incoming responses found"
+            )
             
             return all_responses
             

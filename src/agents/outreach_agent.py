@@ -81,6 +81,13 @@ class OutreachAgent(BaseAgent):
         except Exception as e:
             self.logger.error(f"Error checking invitations on startup: {e}")
         
+        # Check for responses immediately on startup (don't wait for first scheduled run)
+        self.logger.info("Checking for responses on startup...")
+        try:
+            self.monitor_responses()
+        except Exception as e:
+            self.logger.error(f"Error checking responses on startup: {e}")
+        
         self.scheduler.start()
     
     def process_allocated_leads(self) -> None:
@@ -88,16 +95,43 @@ class OutreachAgent(BaseAgent):
         self.logger.info("Processing allocated leads")
         
         try:
+            # First, read ALL leads to see what we have (for debugging)
+            all_leads = self.state_manager.read_leads({})
+            self.logger.info(f"Total leads in database: {len(all_leads)}")
+            for lead in all_leads:
+                if lead.id in ["lead_001", "lead_002", "lead_003"]:
+                    self.logger.info(
+                        f"  Lead {lead.id}: {lead.name}, "
+                        f"contact_status={lead.contact_status}, "
+                        f"allocated_to={lead.allocated_to}, "
+                        f"message_sent={lead.message_sent}, "
+                        f"allocated_at={lead.allocated_at}"
+                    )
+            
             # Read allocated leads
             filters = {"contact_status": "Allocated", "allocated_to": "Outreach"}
             leads = self.state_manager.read_leads(filters)
-            self.logger.info(f"Found {len(leads)} allocated leads")
+            self.logger.info(f"Found {len(leads)} allocated leads matching filters: {filters}")
             
-            # Filter: only leads without message_sent (haven't been processed yet)
+            # Log details about each allocated lead
+            for lead in leads:
+                self.logger.info(f"  - Lead {lead.id}: {lead.name}, message_sent={lead.message_sent}, contact_status={lead.contact_status}")
+            
+            # Filter: only leads with status "Allocated" (haven't been successfully sent yet)
+            # If contact_status is "Allocated", the lead should be processed regardless of message_sent,
+            # because message_sent might contain a draft that failed to send
             pending_leads = [
                 lead for lead in leads 
-                if not lead.message_sent  # No message sent yet
+                if lead.contact_status == "Allocated"  # Only process "Allocated" leads
             ]
+            
+            # Log why leads are excluded (shouldn't happen since we filter by "Allocated" above)
+            excluded_leads = [lead for lead in leads if lead not in pending_leads]
+            if excluded_leads:
+                self.logger.warning(
+                    f"Unexpected: {len(excluded_leads)} leads excluded despite 'Allocated' filter: "
+                    f"{[f'{lead.id}(status={lead.contact_status})' for lead in excluded_leads]}"
+                )
             
             # Also include newly allocated leads (for immediate processing)
             # Normalize datetimes to timezone-aware (UTC) before comparison
@@ -126,7 +160,11 @@ class OutreachAgent(BaseAgent):
                     
                     # Check rate limit
                     if not self.rate_limiter.can_send():
-                        self.logger.warning(f"Rate limit check failed for {lead.name}. Check logs above for details.")
+                        remaining = len(pending_leads) - pending_leads.index(lead) - 1
+                        self.logger.warning(
+                            f"Rate limit check failed for {lead.name}. "
+                            f"Skipping remaining {remaining} leads. Check logs above for details."
+                        )
                         break
                     
                     # Generate message
@@ -167,16 +205,26 @@ class OutreachAgent(BaseAgent):
                             self.logger.debug(f"Invitation already sent to {lead.name} (status already set)")
                         
                     elif result.success:
+                        # Build notes with message ID and timestamp
+                        note_parts = []
+                        if result.message_id:
+                            note_parts.append(f"Message ID: {result.message_id}")
+                        note_parts.append(f"Sent via {result.service_used or 'unipile'}")
+                        if result.timestamp:
+                            note_parts.append(f"at {result.timestamp.isoformat()}")
+                        notes = ". ".join(note_parts) + f". URL: {lead.linkedin_url}"
+                        
                         updates = {
                             "contact_status": "Message Sent",
                             "message_sent": message,
                             "message_sent_at": result.timestamp.isoformat() if result.timestamp else datetime.now(timezone.utc).isoformat(),
+                            "notes": notes,
                             "last_updated": datetime.now(timezone.utc).isoformat()
                         }
                         self.state_manager.update_lead(lead.id, updates)
                         
                         wait_time = self.rate_limiter.record_send()
-                        self.logger.info(f"✓ Message sent to {lead.name}")
+                        self.logger.info(f"✓ Message sent to {lead.name} (ID: {result.message_id})")
                         time.sleep(wait_time)
                         
                     else:
@@ -236,18 +284,38 @@ class OutreachAgent(BaseAgent):
         try:
             # Get responses from LinkedIn service
             responses = self.linkedin_sender.check_responses()
+            self.logger.info(f"Found {len(responses)} new responses from LinkedIn service")
             
             # Get leads with sent messages
             filters = {"contact_status": "Message Sent"}
             leads_with_messages = self.state_manager.read_leads(filters)
+            self.logger.info(f"Found {len(leads_with_messages)} leads with sent messages: {[lead.id for lead in leads_with_messages]}")
+            
+            if not responses:
+                self.logger.info("No new responses found")
+                return
+            
+            # Log details about each response
+            for i, response_data in enumerate(responses, 1):
+                self.logger.info(
+                    f"Response {i}/{len(responses)}: "
+                    f"message_id={response_data.get('message_id')}, "
+                    f"linkedin_url={response_data.get('linkedin_url')}, "
+                    f"text_preview={response_data.get('text', '')[:100]}..."
+                )
             
             # Match responses to leads
+            matched_count = 0
             for response_data in responses:
                 # Find matching lead (by message_id or linkedin_url)
                 lead = self._find_lead_for_response(response_data, leads_with_messages)
                 
                 if lead:
+                    matched_count += 1
+                    self.logger.info(f"✓ Matched response to lead {lead.id} ({lead.name})")
+                    
                     # Analyse response
+                    self.logger.debug(f"Analyzing response from {lead.name}...")
                     analysis = self.analyse_response(
                         response_data.get("text", ""),
                         lead.message_sent
@@ -272,7 +340,18 @@ class OutreachAgent(BaseAgent):
                         "intent": analysis.intent
                     })
                     
-                    self.logger.info(f"Response received from {lead.name}: {analysis.sentiment} - {analysis.intent}")
+                    self.logger.info(f"✓ Response received from {lead.name}: {analysis.sentiment} - {analysis.intent}")
+                else:
+                    self.logger.warning(
+                        f"✗ Could not match response to any lead. "
+                        f"message_id={response_data.get('message_id')}, "
+                        f"linkedin_url={response_data.get('linkedin_url')}"
+                    )
+            
+            if matched_count > 0:
+                self.logger.info(f"Processed {matched_count} responses out of {len(responses)} total")
+            else:
+                self.logger.info(f"No responses matched to leads (checked {len(responses)} responses)")
             
         except Exception as e:
             self.logger.error(f"Error monitoring responses: {e}")
