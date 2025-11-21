@@ -326,22 +326,35 @@ class LinkedInSender:
             SendResult with status='invitation_sent' if successful
         """
         try:
-            # Truncate message to 250 characters (Unipile API limit is 300, but we use 250 for safety)
-            # Some APIs count newlines or special characters differently
-            max_length = 250
+            # Normalize message: replace newlines with spaces (LinkedIn may count them differently)
+            # Also collapse multiple spaces
+            import re
+            message = re.sub(r'\s+', ' ', message.replace('\n', ' ').replace('\r', ' ')).strip()
+            
+            # Truncate message to 200 characters (very conservative limit)
+            # Testing showed that messages up to 250 chars work via curl, but in practice
+            # API may count characters differently (UTF-8 bytes, special chars, etc.)
+            max_length = 200
             if len(message) > max_length:
                 original_length = len(message)
                 # Truncate to leave room for ellipsis, try to break at word boundary
                 truncated = message[:max_length - 3]
                 # Find last space to avoid breaking words
                 last_space = truncated.rfind(' ')
-                if last_space > max_length - 20:  # Only use word boundary if it's not too far back
+                if last_space > max_length - 30:  # Only use word boundary if it's not too far back
                     truncated = truncated[:last_space]
                 message = truncated.rstrip() + "..."
                 final_length = len(message)
                 self.logger.warning(
                     f"Invitation message truncated from {original_length} to {final_length} characters"
                 )
+            
+            # Log what we're sending for debugging
+            message_bytes = len(message.encode('utf-8'))
+            self.logger.info(
+                f"Sending invitation message: {len(message)} chars, {message_bytes} bytes. "
+                f"Preview: {message[:80]}..."
+            )
             
             url = f"{self.base_url}/users/invite"
             payload = {
@@ -353,25 +366,61 @@ class LinkedInSender:
             self.logger.info(f"Attempting to send invitation to provider_id: {provider_id}")
             response = requests.post(url, json=payload, headers=self.headers, timeout=30)
             
+            # Handle different error status codes
             if response.status_code == 400:
-                error_detail = response.json().get("detail", "")
-                self.logger.warning(f"Invitation failed (400): {error_detail}")
-                
-                # Check if error is about message length
-                if "length" in error_detail.lower() or "300" in error_detail:
-                    raise ValueError(
-                        f"Cannot send invitation: message is too long (max 300 chars). "
-                        f"Error: {error_detail}"
-                    )
-                
-                # Check if error is about provider_id format
-                if "format" in error_detail.lower() or "invalid" in error_detail.lower():
-                    raise ValueError(
-                        f"Cannot send invitation: provider_id format issue. "
-                        f"Error: {error_detail}"
-                    )
-                
-                raise ValueError(f"Cannot send invitation: {error_detail}")
+                try:
+                    error_data = response.json()
+                    error_detail = error_data.get("detail", str(error_data))
+                    self.logger.warning(f"Invitation failed (400): {error_detail}")
+                    
+                    # Check if error is about message length
+                    if "length" in error_detail.lower() or "300" in error_detail or "character" in error_detail.lower():
+                        raise ValueError(
+                            f"Cannot send invitation: message is too long. "
+                            f"Error: {error_detail}"
+                        )
+                    
+                    # Check if error is about provider_id format
+                    if "format" in error_detail.lower() or "invalid" in error_detail.lower():
+                        raise ValueError(
+                            f"Cannot send invitation: provider_id format issue. "
+                            f"Error: {error_detail}"
+                        )
+                    
+                    raise ValueError(f"Cannot send invitation: {error_detail}")
+                except ValueError:
+                    raise
+                except Exception as e:
+                    raise ValueError(f"Cannot send invitation: {response.text}")
+            
+            elif response.status_code == 422:
+                # 422 Unprocessable Entity - usually means invitation already sent recently
+                try:
+                    error_data = response.json()
+                    error_type = error_data.get("type", "")
+                    error_detail = error_data.get("detail", str(error_data))
+                    error_title = error_data.get("title", "")
+                    
+                    self.logger.warning(f"Invitation failed (422): {error_title} - {error_detail}")
+                    
+                    # Check if it's "already invited recently" error
+                    if "already" in error_type.lower() or "recently" in error_detail.lower():
+                        # This is not really an error - invitation was already sent
+                        # Return a special status to indicate this
+                        self.logger.info(f"Invitation already sent recently (not an error): {error_detail}")
+                        return SendResult(
+                            success=False,  # Not a new send
+                            message_id="already_sent",  # Placeholder ID
+                            timestamp=datetime.now(),
+                            service_used='unipile',
+                            status='invitation_already_sent'
+                        )
+                    
+                    raise ValueError(f"Cannot send invitation (422): {error_title} - {error_detail}")
+                except ValueError:
+                    raise
+                except Exception as e:
+                    raise ValueError(f"Cannot send invitation (422): {response.text}")
             
             response.raise_for_status()
             

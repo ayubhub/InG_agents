@@ -122,9 +122,10 @@ class OutreachAgent(BaseAgent):
                     
                     # Check invitation sent first (success=False but status='invitation_sent')
                     if result.status == "invitation_sent":
+                        # Message is already truncated to 200 chars in LinkedInSender
                         updates = {
                             "contact_status": "Invitation Sent",
-                            "message_sent": message[:300] if len(message) > 300 else message,  # Truncated invitation message
+                            "message_sent": message,  # Already truncated to 200 chars in LinkedInSender
                             "message_sent_at": result.timestamp.isoformat() if result.timestamp else datetime.now(timezone.utc).isoformat(),
                             "notes": f"Invitation ID: {result.message_id}, Waiting for acceptance. URL: {lead.linkedin_url}",
                             "last_updated": datetime.now(timezone.utc).isoformat()
@@ -133,6 +134,20 @@ class OutreachAgent(BaseAgent):
                         self.logger.info(f"→ Invitation sent to {lead.name} (ID: {result.message_id})")
                         wait_time = self.rate_limiter.record_send()
                         time.sleep(wait_time)
+                        
+                    elif result.status == "invitation_already_sent":
+                        # Invitation was already sent recently (422 error from Unipile)
+                        # Update status if not already set
+                        if lead.contact_status != "Invitation Sent":
+                            updates = {
+                                "contact_status": "Invitation Sent",
+                                "notes": f"Invitation already sent recently. Waiting for acceptance. URL: {lead.linkedin_url}",
+                                "last_updated": datetime.now(timezone.utc).isoformat()
+                            }
+                            self.state_manager.update_lead(lead.id, updates)
+                            self.logger.info(f"→ Invitation already sent to {lead.name} (updating status)")
+                        else:
+                            self.logger.debug(f"Invitation already sent to {lead.name} (status already set)")
                         
                     elif result.success:
                         updates = {
@@ -148,15 +163,16 @@ class OutreachAgent(BaseAgent):
                         time.sleep(wait_time)
                         
                     else:
-                        # Failed to send
+                        # Failed to send - do NOT update message_sent or message_sent_at
                         error_note = f"Failed: {result.error_message}" if result.error_message else "Unknown error"
                         updates = {
                             "contact_status": "Allocated",  # Keep as allocated to retry later
                             "notes": error_note,
                             "last_updated": datetime.now(timezone.utc).isoformat()
+                            # Note: We intentionally do NOT update message_sent or message_sent_at on failure
                         }
                         self.state_manager.update_lead(lead.id, updates)
-                        self.logger.error(f"Failed to send message to {lead.name}: {result.error_message}")
+                        self.logger.error(f"Failed to send message/invitation to {lead.name}: {result.error_message}")
                         
                 except RateLimitExceededError:
                     self.logger.info("Rate limit exceeded, stopping")

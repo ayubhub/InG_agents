@@ -6,7 +6,7 @@ lead_finder:
   llm_model: "gemini-2.5-flash-preview-09-2025"
   lead_source: "google_sheets"
   max_leads_per_day: 100
-  quality_threshold: 6.0  # Minimum quality score to process
+  quality_threshold: 5.0  # Minimum quality score to process (lowered for testing)
   default_quality_score: 5.0  # Used when sheet cell is empty or invalid
   classification_mode: "rule_based_enhanced"
   processing_interval_minutes: 2  # Check for new leads every 2 minutes
