@@ -287,21 +287,35 @@ class LinkedInSender:
             
             chats = response.json().get("items", [])
             
+            # Try to get LinkedIn ID from URL first (more reliable)
+            linkedin_id = self._get_linkedin_id_by_identifier(linkedin_url)
+            
             # Normalize LinkedIn URL for comparison
             linkedin_url_normalized = linkedin_url.lower().rstrip('/')
+            username = self._extract_linkedin_provider_id(linkedin_url)
             
             # Search in chats for matching attendee
-            # attendee_provider_id can be either username or full LinkedIn ID
+            # attendee_provider_id is usually full LinkedIn ID (e.g., ACoAAE7X2j4BhlsL3pPOcNuKUT6f5DQ5XhOvoHI)
             for chat in chats:
                 attendee_provider_id = chat.get("attendee_provider_id", "")
                 if not attendee_provider_id:
                     continue
                 
-                # Check if LinkedIn URL contains the provider_id or vice versa
+                # Match by LinkedIn ID (most reliable)
+                if linkedin_id and attendee_provider_id == linkedin_id:
+                    self.logger.debug(f"Found user in chats by LinkedIn ID: {linkedin_id}")
+                    return {
+                        "id": chat.get("id"),
+                        "provider_id": attendee_provider_id
+                    }
+                
+                # Fallback: Check if LinkedIn URL contains the provider_id or vice versa
                 # Also check if provider_id is part of the LinkedIn URL path
                 if (attendee_provider_id.lower() in linkedin_url_normalized or 
                     linkedin_url_normalized.endswith(f"/{attendee_provider_id.lower()}/") or
-                    linkedin_url_normalized.endswith(f"/{attendee_provider_id.lower()}")):
+                    linkedin_url_normalized.endswith(f"/{attendee_provider_id.lower()}") or
+                    (username and username.lower() in attendee_provider_id.lower())):
+                    self.logger.debug(f"Found user in chats by URL/username match: {linkedin_url}")
                     return {
                         "id": chat.get("id"),
                         "provider_id": attendee_provider_id
@@ -526,6 +540,8 @@ class LinkedInSender:
         """
         Check if invitation was accepted (polling).
         
+        Strategy: If user is found in existing chats, invitation was accepted.
+        
         Args:
             invite_id: Invitation ID (may not be used, kept for compatibility)
             linkedin_url: LinkedIn profile URL to check
@@ -538,9 +554,14 @@ class LinkedInSender:
         
         try:
             # Check if user is now in contacts (invitation accepted)
-            user = self._find_unipile_user(linkedin_url)
-            if user and user.get("connection_status") == "connected":
+            # If user is found in chats, it means invitation was accepted
+            user_chat = self._find_unipile_user_in_chats(linkedin_url)
+            if user_chat:
+                self.logger.info(f"User found in chats - invitation accepted: {linkedin_url}")
                 return "accepted"
+            
+            # User not in chats yet - invitation still pending
+            self.logger.debug(f"User not in chats yet - invitation pending: {linkedin_url}")
             return "pending"
             
         except Exception as e:

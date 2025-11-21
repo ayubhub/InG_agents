@@ -47,7 +47,7 @@ class OutreachAgent(BaseAgent):
             self.process_allocated_leads,
             trigger=IntervalTrigger(minutes=process_interval),
             id='process_leads',
-            next_run_time=datetime.now()
+            next_run_time=datetime.now(timezone.utc)  # Run immediately on startup
         )
         
         # Check responses
@@ -56,7 +56,7 @@ class OutreachAgent(BaseAgent):
             self.monitor_responses,
             trigger=IntervalTrigger(hours=response_hours),
             id='check_responses',
-            next_run_time=datetime.now()
+            next_run_time=datetime.now(timezone.utc)  # Run immediately on startup
         )
         
         # Check pending invitations (for Unipile)
@@ -65,7 +65,7 @@ class OutreachAgent(BaseAgent):
             self.check_pending_invitations,
             trigger=IntervalTrigger(hours=invitation_hours),
             id='check_invitations',
-            next_run_time=datetime.now()
+            next_run_time=datetime.now(timezone.utc)  # Run immediately on startup
         )
         
         self.logger.info(f"Scheduler: process every {process_interval} min")
@@ -73,6 +73,14 @@ class OutreachAgent(BaseAgent):
     def run(self) -> None:
         """Main agent loop."""
         self.logger.info("Outreach Agent running")
+        
+        # Check pending invitations immediately on startup (don't wait for first scheduled run)
+        self.logger.info("Checking pending invitations on startup...")
+        try:
+            self.check_pending_invitations()
+        except Exception as e:
+            self.logger.error(f"Error checking invitations on startup: {e}")
+        
         self.scheduler.start()
     
     def process_allocated_leads(self) -> None:
