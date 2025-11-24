@@ -105,36 +105,20 @@ AI-powered sales department with three specialised agents: **Sales Manager Agent
 **Speaker Template**:
 "Hi [Name],
 
-We're hosting an Innovators Guild event on [Date] - a curated gathering of the most ambitious engineers, founders, and innovators building the future.
+Thanks for connecting! I noticed your role at [Company] and your bio line about [short phrase from their bio]. You're clearly working on something interesting in the tech world.
 
-Your work at [Company] leading [specific area] is exactly the kind of perspective our community needs to hear. I think you'd be a perfect fit.
+I'm part of the Innovators Guild, and on [Date] we're bringing together engineers and scientists tackling tough problems in [Prospect's industry]. I don't know much about your work yet, but if you're open to it, I'd love to hear your story, and see if speaking at this event might be a good fit.
 
-Interested in speaking?
-
-Best,
-
-Ayub
-
-Innovators Guild
-
-https://innovators.london"
+No pressure at all. If you're interested, let me know and we can set up a quick chat. Either way, I'm looking forward to learning more about what you do."
 
 **Sponsor Template**:
 "Hi [Name],
 
-I've been following [Company]'s work in [one thing they're known for] - really impressed!
+Thanks for connecting! I've noticed [Company]'s focus on [one thing they're known for], it looks impressive and definitely relevant to some of the challenges we tackle with the Innovators Guild.
 
-We run Innovators Guild events that bring together ambitious leaders and emerging companies. I think your team would find real value in being part of it.
+We organise events that gather ambitious leaders and emerging companies who are passionate about commercialising deep-tech and innovation. Since you clearly have insight into this space, I wondered if it might make sense to chat about ways [Company] could get involved, whether through sponsorship or collaboration.
 
-Would you be open to a quick chat about sponsoring or collaborating on an event?
-
-Best,
-
-Ayub
-
-Innovators Guild
-
-https://innovators.london"
+No pressure at all, but if you're curious, I'd love to schedule a quick call to swap ideas and see if there's a fit."
 
 ---
 
