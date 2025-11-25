@@ -79,7 +79,7 @@ Quality Score: 7.5
 Contact Status: Message Sent
 Allocated To: Outreach
 Allocated At: 2025-01-15 09:30:00
-Message Sent: Hi John! We're organising a tech event on 2025-11-20. Given your experience at Tech Corp as CTO, we think you'd be perfect as a speaker. Interested in sharing your insights?
+Message Sent: Hey John, We've just connected, so here's the blunt truth: All I know is you're at Tech Corp, and your bio says, "building resilient robotics." That caught my attention - that's it. I run a crew called Innovators Guild, where we talk about what's tough, weird, or broken in robotics. No selling, no bragging, just what's real. Next event's on 2025-11-20. If you want to drop your story into the mix or just lurk and listen, you're invited. If this sounds like LinkedIn spam, bin it. If not, send something back. Aybulat
 Message Sent At: 2025-01-15 10:15:00
 Response: (empty)
 Response Received At: (empty)
@@ -103,7 +103,7 @@ Quality Score: 8.5
 Contact Status: Invitation Sent
 Allocated To: Outreach
 Allocated At: 2025-01-15 09:30:00
-Message Sent: Hi Jane, We're hosting an Innovators Guild event on 2025-11-20 - a curated gathering of the most ambitious engineers, founders, and innovators building the future. Your work at Startup Inc leading CEO is exactly the kind of perspective our community needs to hear. I think you'd be a perfect fit. Interested in speaking? Best, Ayub Innovators Guild https://innovators.london
+Message Sent: Hi Jane, Saw Startup Inc in the wild working on climate analytics. I'll be honest: I don't have some crafted pitch or research dossier. Innovators Guild is about builders who actually do stuff - sometimes it works, sometimes it explodes. If you feel like getting involved (money, projects, experiments - whatever), ping me. If not, that's completely fine too. No follow-ups, no nurture sequence, no "circle-back." Aybulat
 Message Sent At: 2025-01-15 10:00:00
 Response: (empty)
 Response Received At: (empty)

@@ -341,40 +341,30 @@ def calculate_quality_score(lead: Lead) -> float:
 
 **Speaker Template**:
 ```
-Hi [Name],
+Hey [Name],
 
-We're hosting an Innovators Guild event on [Date] - a curated gathering of the most ambitious engineers, founders, and innovators building the future.
+We've just connected, so here's the blunt truth: All I know is you're at [Company], and your bio says, "{short phrase}." That caught my attention - that's it.
 
-Your work at [Company] leading [specific area] is exactly the kind of perspective our community needs to hear. I think you'd be a perfect fit.
+I run a crew called Innovators Guild, where we get together and actually talk about what's tough, weird, or broken in [industry]. No selling, no bragging, just what's real. Next event's on [Date].
 
-Interested in speaking?
+If you want to drop your story into the mix or just lurk and listen, you're invited.
 
-Best,
+If this sounds like LinkedIn spam, bin it. If not, send something back.
 
-Ayub
-
-Innovators Guild
-
-https://innovators.london
+Aybulat
 ```
 
 **Sponsor Template**:
 ```
 Hi [Name],
 
-I've been following [Company]'s work in [one thing they're known for] - really impressed!
+Saw [Company] in the wild doing [one thing they're known for]. I'll be honest: I don't have some crafted pitch or research dossier.
 
-We run Innovators Guild events that bring together ambitious leaders and emerging companies. I think your team would find real value in being part of it.
+Innovators Guild is about builders who actually do stuff - sometimes it works, sometimes it explodes. If you feel like getting involved (money, projects, experiments - whatever), ping me. If not, that's completely fine too.
 
-Would you be open to a quick chat about sponsoring or collaborating on an event?
+No follow-ups, no nurture sequence, no "circle-back."
 
-Best,
-
-Ayub
-
-Innovators Guild
-
-https://innovators.london
+Aybulat
 ```
 
 **Template Variables**:

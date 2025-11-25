@@ -103,22 +103,28 @@ AI-powered sales department with three specialised agents: **Sales Manager Agent
 **Improved Message Templates** (initial versions):
 
 **Speaker Template**:
-"Hi [Name],
+"Hey [Name],
 
-Thanks for connecting! I noticed your role at [Company] and your bio line about [short phrase from their bio]. You're clearly working on something interesting in the tech world.
+We've just connected, so here's the blunt truth: All I know is you're at [Company], and your bio says, "{short phrase}." That caught my attention - that's it.
 
-I'm part of the Innovators Guild, and on [Date] we're bringing together engineers and scientists tackling tough problems in [Prospect's industry]. I don't know much about your work yet, but if you're open to it, I'd love to hear your story, and see if speaking at this event might be a good fit.
+I run a crew called Innovators Guild, where we get together and actually talk about what's tough, weird, or broken in [industry]. No selling, no bragging, just what's real. Next event's on [Date].
 
-No pressure at all. If you're interested, let me know and we can set up a quick chat. Either way, I'm looking forward to learning more about what you do."
+If you want to drop your story into the mix or just lurk and listen, you're invited.
+
+If this sounds like LinkedIn spam, bin it. If not, send something back.
+
+Aybulat"
 
 **Sponsor Template**:
 "Hi [Name],
 
-Thanks for connecting! I've noticed [Company]'s focus on [one thing they're known for], it looks impressive and definitely relevant to some of the challenges we tackle with the Innovators Guild.
+Saw [Company] in the wild doing [one thing they're known for]. I'll be honest: I don't have some crafted pitch or research dossier.
 
-We organise events that gather ambitious leaders and emerging companies who are passionate about commercialising deep-tech and innovation. Since you clearly have insight into this space, I wondered if it might make sense to chat about ways [Company] could get involved, whether through sponsorship or collaboration.
+Innovators Guild is about builders who actually do stuff - sometimes it works, sometimes it explodes. If you feel like getting involved (money, projects, experiments - whatever), ping me. If not, that's completely fine too.
 
-No pressure at all, but if you're curious, I'd love to schedule a quick call to swap ideas and see if there's a fit."
+No follow-ups, no nurture sequence, no "circle-back."
+
+Aybulat"
 
 ---
 
