@@ -1,4 +1,4 @@
-# InG AI Sales Department - Multi-Agent LinkedIn Outreach System
+# InG AI Sales Department - Multi-Agent Outreach System
 
 AI-powered sales department with three specialised agents: **Sales Manager Agent** (coordinates operations), **Lead Finder Agent** (discovers prospects), and **Outreach Agent** (sends messages and analyses responses). Human team focuses on deal closure.
 
