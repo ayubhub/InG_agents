@@ -4,71 +4,28 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
 venv/
 env/
 ENV/
-.venv
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# Environment variables
+# Environment
 .env
 .env.local
-.env.*.local
-.env.backup 
 
-# Logs
-logs/
-*.log
-data/logs/*.log
-
-# Local Data (exclude data but keep structure)
-data/state/*.db
-data/state/*.db-journal
-data/state/*.pid  # Process lock file
-data/queue/**/*.json
-data/cache/**/*.json
-!data/.gitkeep
-!data/**/.gitkeep
-
-# Configuration (sensitive)
+# Credentials
 config/google-credentials.json
-config/*.json
-!config/.gitkeep
 
-# State files
-rate_limiter_state.json
-*.state
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
+# Data
+data/state/*.pid
+data/logs/*.log
+data/cache/
 
 # OS
 .DS_Store
 Thumbs.db
-
