@@ -12,7 +12,7 @@ from src.core.models import Lead, SendResult, ResponseAnalysis
 from src.core.message_generator import MessageGenerator
 from src.core.response_analyser import ResponseAnalyser
 from src.core.rate_limiter import RateLimiter, RateLimitExceededError
-from src.integrations.linkedin_sender import LinkedInSender
+from src.integrations.multi_account_linkedin import MultiAccountLinkedInSender
 
 class OutreachAgent(BaseAgent):
     """Outreach Agent for sending messages and analyzing responses."""
@@ -34,7 +34,7 @@ class OutreachAgent(BaseAgent):
         sqlite_db = storage.get("sqlite_db", "data/state/agents.db")
         self.rate_limiter = RateLimiter(self.config, sqlite_db)
         
-        self.linkedin_sender = LinkedInSender(self.config)
+        self.linkedin_sender = MultiAccountLinkedInSender(self.config)
         
         self.scheduler = BlockingScheduler()
         self._setup_scheduler()
@@ -224,7 +224,7 @@ class OutreachAgent(BaseAgent):
                         self.state_manager.update_lead(lead.id, updates)
                         
                         wait_time = self.rate_limiter.record_send()
-                        self.logger.info(f"✓ Message sent to {lead.name} (ID: {result.message_id})")
+                        self.logger.info(f"Message sent to {lead.name} (ID: {result.message_id})")
                         time.sleep(wait_time)
                         
                     else:
@@ -412,7 +412,7 @@ class OutreachAgent(BaseAgent):
                     now = datetime.now(timezone.utc)
                     
                     if status == "accepted":
-                        self.logger.info(f"✓ Invitation accepted: {lead.name}")
+                        self.logger.info(f"Invitation accepted: {lead.name}")
                         
                         # Reset to Allocated for message sending
                         updates = {

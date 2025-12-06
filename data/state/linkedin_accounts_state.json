@@ -1,0 +1,26 @@
+{
+  "account_stats": {
+    "Account_1": {
+      "daily_sent": 50,
+      "hourly_sent": 0,
+      "last_reset_date": "2025-11-26",
+      "last_reset_hour": 15,
+      "total_sent": 0,
+      "last_error": "Failed to send invitation. LinkedIn URL: https://www.linkedin.com/in/netameidav/, ID: ACoAAAMrTcIBOHJEzYNGiz8vGiRnoM12l3ncCbw. Error: Cannot send invitation (422): Cannot resend yet - You have reached a temporary provider limit. Please try again later.",
+      "error_count": 1,
+      "last_used": null
+    },
+    "Account_2": {
+      "daily_sent": 1,
+      "hourly_sent": 1,
+      "last_reset_date": "2025-11-26",
+      "last_reset_hour": 15,
+      "total_sent": 1,
+      "last_error": "Could not find LinkedIn ID for URL: https://www.linkedin.com/in/mykola-nick-nogai-47217339/. User may not be searchable or may not exist. Please ensure the LinkedIn URL is correct or send invitation manually through Unipile dashboard.",
+      "error_count": 12,
+      "last_used": "2025-11-26T15:22:15.043242"
+    }
+  },
+  "current_account_index": 1,
+  "last_updated": "2025-11-26T15:49:11.592955"
+}

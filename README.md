@@ -2,6 +2,18 @@
 
 AI-powered sales department with three specialised agents: **Sales Manager Agent** (coordinates operations), **Lead Finder Agent** (discovers prospects), and **Outreach Agent** (sends messages and analyses responses). Human team focuses on deal closure.
 
+## 🚀 Quick Start
+
+**⚠️ IMPORTANT:** Always use the wrapper script to run the application:
+
+```bash
+python run_main.py
+```
+
+**❌ DO NOT run:** `python main.py` directly (will cause ModuleNotFoundError)
+
+See [docs/getting-started.md](docs/getting-started.md) for detailed instructions.
+
 ## Project Structure
 
 ```
@@ -31,8 +43,13 @@ InG_agents/
 
 ## Documentation
 
-All project documentation is located in the `docs/` directory (condensed versions, ~200-300 lines each):
+All project documentation is located in the `docs/` directory:
 
+### Getting Started
+- **getting-started.md**: Complete setup guide, installation, and troubleshooting
+- **configuration.md**: Account configuration, API testing, and environment variables
+
+### Technical Documentation
 - **01-use-cases.md**: Business use cases and requirements for analysts
 - **02-technical-solution.md**: Architecture and technical solution for architects
 - **03-technical-specification.md**: Implementation specification for developers
@@ -45,6 +62,7 @@ All project documentation is located in the `docs/` directory (condensed version
 - **10-api-integrations.md**: External API integration details (Gemini, Sheets, LinkedIn, SMTP)
 - **11-daily-report-format.md**: Daily report format and examples
 - **13-setup-guide.md**: Step-by-step account setup instructions for testing
+- **code-review.md**: Code review and improvement recommendations
 
 ## Quick Start
 
@@ -61,10 +79,14 @@ pip install -r requirements.txt
 
 4. Run all agents (one command):
 ```bash
-python main.py
+python run_main.py
 ```
 
+**⚠️ IMPORTANT:** Always use `python run_main.py` instead of `python main.py` to ensure venv dependencies are loaded correctly.
+
 **Note**: This single command starts all three agents (Sales Manager, Lead Finder, Outreach) in parallel. They run continuously until stopped (Ctrl+C). See `docs/06-deployment-and-running.md` for details.
+
+See [docs/getting-started.md](docs/getting-started.md) for detailed setup instructions and troubleshooting.
 
 ## Features
 

@@ -1,0 +1,8 @@
+#!/bin/bash
+# Simple wrapper to run main.py with venv Python
+
+cd "$(dirname "$0")"
+./venv/Scripts/python.exe main.py "$@"
+
+
+

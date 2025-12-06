@@ -146,9 +146,9 @@ class LeadFinderAgent(BaseAgent):
                     # Update in Google Sheets
                     if self.update_lead_classification(analysed_lead):
                         processed += 1
-                        self.logger.info(f"✓ Updated lead {lead.id}: {lead.name} -> {analysed_lead.classification} (score: {analysed_lead.quality_score})")
+                        self.logger.info(f"Updated lead {lead.id}: {lead.name} -> {analysed_lead.classification} (score: {analysed_lead.quality_score})")
                     else:
-                        self.logger.warning(f"✗ Failed to update lead {lead.id}: {lead.name}")
+                        self.logger.warning(f"Failed to update lead {lead.id}: {lead.name}")
                     
                     # Publish event (deprecated, but kept for compatibility)
                     self.publish_event("lead_discovered", {

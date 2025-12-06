@@ -82,7 +82,7 @@ class SalesManagerAgent(BaseAgent):
             self.logger.info(f"Found {len(leads)} classified leads, {len(new_leads)} new since last check (last_coordination_time: {self.last_coordination_time})")
             
             if new_leads:
-                self.logger.info(f"⚡ Found {len(new_leads)} newly classified leads")
+                self.logger.info(f"Found {len(new_leads)} newly classified leads")
                 
                 # Get quality threshold from lead_finder config
                 lead_finder_config = self.config.get("lead_finder", {})
@@ -100,7 +100,7 @@ class SalesManagerAgent(BaseAgent):
                         }
                         if self.state_manager.update_lead(lead.id, updates):
                             allocated_count += 1
-                            self.logger.info(f"✓ Allocated lead {lead.id}: {lead.name} (score: {lead.quality_score})")
+                            self.logger.info(f"Allocated lead {lead.id}: {lead.name} (score: {lead.quality_score})")
                         else:
                             self.logger.warning(f"✗ Failed to allocate lead {lead.id}: {lead.name}")
                     else:

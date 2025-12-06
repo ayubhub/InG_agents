@@ -181,20 +181,38 @@ class LinkedInSender:
                             status='invitation_failed'
                         )
                 else:
-                    # Could not find LinkedIn ID via search
-                    error_msg = (
-                        f"Could not find LinkedIn ID for URL: {linkedin_url}. "
-                        f"User may not be searchable or may not exist. "
-                        f"Please ensure the LinkedIn URL is correct or send invitation manually through Unipile dashboard."
-                    )
-                    self.logger.warning(error_msg)
-                    return SendResult(
-                        success=False,
-                        error_message=error_msg,
-                        timestamp=datetime.now(),
-                        service_used='unipile',
-                        status='user_not_found'
-                    )
+                    # Could not find LinkedIn ID via search - try sending invitation with URL directly
+                    self.logger.warning(f"Could not find LinkedIn ID for {linkedin_url}, trying to send invitation with URL directly")
+                    try:
+                        # Try sending invitation using LinkedIn URL directly (some Unipile API versions support this)
+                        return self._send_unipile_invitation_by_url(linkedin_url, message)
+                    except Exception as url_invite_error:
+                        # If that also fails, provide helpful error message
+                        username = self._extract_linkedin_provider_id(linkedin_url)
+                        error_msg = (
+                            f"Could not find LinkedIn ID for URL: {linkedin_url} (username: {username}). "
+                            f"Tried both ID lookup and direct URL invitation - both failed.\n"
+                            f"Error: {url_invite_error}\n\n"
+                            f"This can happen when:\n"
+                            f"• User profile is private or not searchable via API\n"
+                            f"• LinkedIn has anti-scraping measures active\n"
+                            f"• User changed their LinkedIn username recently\n"
+                            f"• Unipile API rate limits or restrictions\n"
+                            f"• LinkedIn account needs to be re-authenticated in Unipile\n\n"
+                            f"WORKAROUND: Send invitation manually:\n"
+                            f"1. Go to Unipile dashboard\n"
+                            f"2. Navigate to LinkedIn account\n"
+                            f"3. Send invitation to: {linkedin_url}\n"
+                            f"4. Once accepted, messages will work automatically"
+                        )
+                        self.logger.warning(error_msg)
+                        return SendResult(
+                            success=False,
+                            error_message=error_msg,
+                            timestamp=datetime.now(),
+                            service_used='unipile',
+                            status='user_not_found'
+                        )
             
         except Exception as e:
             self.logger.error(f"Unipile send error: {e}")
@@ -206,70 +224,170 @@ class LinkedInSender:
             )
     
     def _extract_linkedin_provider_id(self, linkedin_url: str) -> Optional[str]:
-        """Extract LinkedIn provider_id from URL."""
-        # LinkedIn URL format: https://www.linkedin.com/in/{username}/
-        # or https://www.linkedin.com/in/{username}
-        import re
-        match = re.search(r'/in/([^/?]+)', linkedin_url)
-        if match:
-            return match.group(1)
-        return None
+        """
+        Extract LinkedIn username/public identifier from LinkedIn URL.
+        
+        Args:
+            linkedin_url: LinkedIn profile URL (e.g., https://www.linkedin.com/in/dashaborysov/)
+            
+        Returns:
+            Username/public identifier (e.g., "dashaborysov") or None if invalid
+        """
+        try:
+            import re
+            
+            # Remove trailing slash and normalize
+            url = linkedin_url.strip().rstrip('/')
+            
+            # Pattern to match LinkedIn profile URLs
+            # Supports various formats:
+            # - https://www.linkedin.com/in/username
+            # - https://linkedin.com/in/username
+            # - www.linkedin.com/in/username
+            # - linkedin.com/in/username
+            pattern = r'(?:https?://)?(?:www\.)?linkedin\.com/in/([a-zA-Z0-9\-_]+)/?'
+            
+            match = re.search(pattern, url, re.IGNORECASE)
+            if match:
+                username = match.group(1)
+                self.logger.debug(f"Extracted LinkedIn username: {username} from URL: {linkedin_url}")
+                return username
+            else:
+                self.logger.warning(f"Could not extract username from LinkedIn URL: {linkedin_url}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error extracting LinkedIn username from {linkedin_url}: {e}")
+            return None
     
     def _get_linkedin_id_by_identifier(self, linkedin_url: str) -> Optional[str]:
         """
         Get full LinkedIn ID by retrieving user profile via Unipile API.
-        Uses /api/v1/users/{identifier} endpoint where identifier can be public_identifier (username).
-        
-        This is the recommended approach as it uses the exact username from URL.
+        Uses multiple approaches to find the LinkedIn ID.
         """
         try:
             # Extract username from URL
             username = self._extract_linkedin_provider_id(linkedin_url)
             if not username:
+                self.logger.error(f"Could not extract username from LinkedIn URL: {linkedin_url}")
                 return None
             
-            # Use /api/v1/users/{identifier} endpoint
-            # According to API schema, identifier can be provider's internal id OR public id (username)
-            url = f"{self.base_url}/users/{username}"
-            params = {
-                "account_id": self.account_id
-            }
+            # Method 1: Try direct user lookup by username
+            provider_id = self._try_direct_user_lookup(username, linkedin_url)
+            if provider_id:
+                return provider_id
             
-            self.logger.debug(f"Fetching LinkedIn profile for username: {username}")
+            # Method 2: Try search approach
+            provider_id = self._try_search_user_lookup(username, linkedin_url)
+            if provider_id:
+                return provider_id
+            
+            # Method 3: Check if user is already in contacts/chats
+            provider_id = self._try_contacts_lookup(linkedin_url)
+            if provider_id:
+                return provider_id
+            
+            self.logger.error(f"Could not find LinkedIn ID for URL: {linkedin_url}. User may not be searchable or may not exist.")
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting LinkedIn ID for {linkedin_url}: {e}")
+            return None
+    
+    def _try_direct_user_lookup(self, username: str, linkedin_url: str) -> Optional[str]:
+        """Try direct user lookup by username."""
+        try:
+            url = f"{self.base_url}/users/{username}"
+            params = {"account_id": self.account_id}
+            
+            self.logger.debug(f"Trying direct lookup for username: {username}")
             response = requests.get(url, headers=self.headers, params=params, timeout=30)
             
             if response.status_code == 404:
-                self.logger.warning(f"User not found: {username}")
+                self.logger.debug(f"Direct lookup: User not found: {username}")
                 return None
             
-            response.raise_for_status()
+            if response.status_code != 200:
+                error_text = response.text[:200] if hasattr(response, 'text') else str(response.status_code)
+                self.logger.warning(f"Direct lookup failed with status {response.status_code}: {error_text}")
+                # If it's a 403 or 401, LinkedIn might be blocking access
+                if response.status_code in [401, 403]:
+                    self.logger.warning(f"LinkedIn may be blocking API access (status {response.status_code})")
+                return None
             
             result = response.json()
             provider_id = result.get("provider_id")
             public_identifier = result.get("public_identifier", "")
             
             if provider_id:
-                # Verify that public_identifier matches our username
-                if public_identifier == username:
-                    self.logger.info(f"✓ Found LinkedIn ID {provider_id} for {username}")
-                    return provider_id
-                else:
-                    self.logger.warning(
-                        f"Found LinkedIn ID {provider_id} for {username}, "
-                        f"but public_identifier is '{public_identifier}' - using anyway"
-                    )
-                    return provider_id
+                self.logger.info(f"Found LinkedIn ID via direct lookup: {provider_id} for {username}")
+                return provider_id
             
             return None
             
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                self.logger.warning(f"User profile not found for {linkedin_url}")
-            else:
-                self.logger.warning(f"HTTP error getting LinkedIn ID: {e}")
+        except requests.exceptions.RequestException as e:
+            self.logger.warning(f"Direct lookup request failed for {username}: {e}")
             return None
         except Exception as e:
-            self.logger.warning(f"Error getting LinkedIn ID: {e}")
+            self.logger.debug(f"Direct lookup failed for {username}: {e}")
+            return None
+    
+    def _try_search_user_lookup(self, username: str, linkedin_url: str) -> Optional[str]:
+        """Try to find user via search functionality."""
+        try:
+            # Try searching for the user by name or username
+            url = f"{self.base_url}/users/search"
+            params = {
+                "account_id": self.account_id,
+                "query": username,
+                "limit": 10
+            }
+            
+            self.logger.debug(f"Trying search lookup for username: {username}")
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            
+            if response.status_code != 200:
+                error_text = response.text[:200] if hasattr(response, 'text') else str(response.status_code)
+                self.logger.warning(f"Search lookup failed with status {response.status_code}: {error_text}")
+                # If it's a 403 or 401, LinkedIn might be blocking access
+                if response.status_code in [401, 403]:
+                    self.logger.warning(f"LinkedIn may be blocking search API access (status {response.status_code})")
+                return None
+            
+            result = response.json()
+            users = result.get("items", [])
+            
+            # Look for exact match by public_identifier
+            for user in users:
+                public_identifier = user.get("public_identifier", "")
+                if public_identifier.lower() == username.lower():
+                    provider_id = user.get("provider_id")
+                    if provider_id:
+                        self.logger.info(f"Found LinkedIn ID via search: {provider_id} for {username}")
+                        return provider_id
+            
+            return None
+            
+        except requests.exceptions.RequestException as e:
+            self.logger.warning(f"Search lookup request failed for {username}: {e}")
+            return None
+        except Exception as e:
+            self.logger.debug(f"Search lookup failed for {username}: {e}")
+            return None
+    
+    def _try_contacts_lookup(self, linkedin_url: str) -> Optional[str]:
+        """Check if user is already in contacts/chats."""
+        try:
+            user_chat = self._find_unipile_user_in_chats(linkedin_url)
+            if user_chat and user_chat.get("provider_id"):
+                provider_id = user_chat["provider_id"]
+                self.logger.info(f"Found LinkedIn ID in existing chats: {provider_id}")
+                return provider_id
+            
+            return None
+            
+        except Exception as e:
+            self.logger.debug(f"Contacts lookup failed for {linkedin_url}: {e}")
             return None
     
     def _find_unipile_user_in_chats(self, linkedin_url: str) -> Optional[Dict]:
@@ -458,6 +576,84 @@ class LinkedInSender:
             
         except Exception as e:
             self.logger.error(f"Error sending Unipile invitation: {e}")
+            raise
+    
+    def _send_unipile_invitation_by_url(self, linkedin_url: str, message: str) -> SendResult:
+        """
+        Try to send LinkedIn invitation using LinkedIn URL directly (fallback method).
+        Some Unipile API versions may support this when provider_id lookup fails.
+        
+        Args:
+            linkedin_url: Full LinkedIn profile URL
+            message: Invitation message
+        
+        Returns:
+            SendResult with status='invitation_sent' if successful
+        """
+        try:
+            # Normalize message
+            import re
+            message = re.sub(r'\s+', ' ', message.replace('\n', ' ').replace('\r', ' ')).strip()
+            max_length = 200
+            if len(message) > max_length:
+                truncated = message[:max_length - 3]
+                last_space = truncated.rfind(' ')
+                if last_space > max_length - 30:
+                    truncated = truncated[:last_space]
+                message = truncated.rstrip() + "..."
+            
+            url = f"{self.base_url}/users/invite"
+            # Try with linkedin_url parameter instead of provider_id
+            payload = {
+                "account_id": self.account_id,
+                "linkedin_url": linkedin_url,
+                "message": message
+            }
+            
+            self.logger.info(f"Attempting to send invitation using LinkedIn URL directly: {linkedin_url}")
+            response = requests.post(url, json=payload, headers=self.headers, timeout=30)
+            
+            # Handle different error status codes
+            if response.status_code == 400:
+                error_data = response.json()
+                error_detail = error_data.get("detail", str(error_data))
+                self.logger.warning(f"Invitation by URL failed (400): {error_detail}")
+                raise ValueError(f"Cannot send invitation by URL: {error_detail}")
+            
+            elif response.status_code == 422:
+                error_data = response.json()
+                error_type = error_data.get("type", "")
+                error_detail = error_data.get("detail", str(error_data))
+                
+                if "already" in error_type.lower() or "recently" in error_detail.lower():
+                    self.logger.info(f"Invitation already sent recently (not an error): {error_detail}")
+                    return SendResult(
+                        success=False,
+                        message_id="already_sent",
+                        timestamp=datetime.now(),
+                        service_used='unipile',
+                        status='invitation_already_sent'
+                    )
+                
+                raise ValueError(f"Cannot send invitation by URL (422): {error_detail}")
+            
+            response.raise_for_status()
+            
+            result = response.json()
+            invite_id = result.get("invitation_id", result.get("id", result.get("invite_id", "unknown")))
+            
+            self.logger.info(f"✓ Invitation sent via Unipile using URL: {invite_id}")
+            
+            return SendResult(
+                success=False,
+                message_id=invite_id,
+                timestamp=datetime.now(),
+                service_used='unipile',
+                status='invitation_sent'
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error sending Unipile invitation by URL: {e}")
             raise
     
     def _get_or_create_chat_by_provider_id(self, provider_id: str) -> str:
@@ -781,4 +977,5 @@ class LinkedInSender:
         except Exception as e:
             self.logger.error(f"Error checking Unipile responses: {e}")
             return []
+
 
