@@ -17,15 +17,36 @@ ENV/
 # Environment
 .env
 .env.local
+.env.*.local
+.env.backup
 
-# Credentials
+# Logs
+logs/
+*.log
+data/logs/*.log
+
+# Local Data (exclude data but keep structure)
+data/state/*.db
+data/state/*.db-journal
+data/state/*.pid  # Process lock file
+data/queue/**/*.json
+data/cache/**/*.json
+!data/.gitkeep
+!data/**/.gitkeep
+# State cache files (must be after !data/**/.gitkeep)
+data/state/*.txt
+data/state/unipile_last_check.txt
+
+# Configuration (sensitive)
 config/google-credentials.json
+config/*.json
+!config/.gitkeep
 
 # Data
-data/state/*.pid
-data/logs/*.log
 data/cache/
 
 # OS
 .DS_Store
 Thumbs.db
+
+.env.backup*
