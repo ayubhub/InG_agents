@@ -188,7 +188,10 @@ class OutreachAgent(BaseAgent):
                         self.state_manager.update_lead(lead.id, updates)
                         self.logger.info(f"→ Invitation sent to {lead.name} (ID: {result.message_id})")
                         wait_time = self.rate_limiter.record_send()
-                        time.sleep(wait_time)
+                        self.logger.debug(f"Rate limit wait time: {wait_time} seconds ({wait_time/60:.1f} minutes)")
+                        # Don't sleep here - it blocks the scheduler. The rate limiter will prevent
+                        # sending too many messages by checking can_send() before each send.
+                        # The wait_time is informational only - actual rate limiting happens via can_send()
 
                     elif result.status == "invitation_already_sent":
                         # Invitation was already sent recently (422 error from Unipile)
@@ -225,7 +228,10 @@ class OutreachAgent(BaseAgent):
 
                         wait_time = self.rate_limiter.record_send()
                         self.logger.info(f"Message sent to {lead.name} (ID: {result.message_id})")
-                        time.sleep(wait_time)
+                        self.logger.debug(f"Rate limit wait time: {wait_time} seconds ({wait_time/60:.1f} minutes)")
+                        # Don't sleep here - it blocks the scheduler. The rate limiter will prevent
+                        # sending too many messages by checking can_send() before each send.
+                        # The wait_time is informational only - actual rate limiting happens via can_send()
 
                     else:
                         # Failed to send - do NOT update message_sent or message_sent_at
