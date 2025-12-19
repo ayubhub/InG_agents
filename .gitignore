@@ -26,17 +26,14 @@ logs/
 data/logs/*.log
 
 # Local Data (exclude data but keep structure)
-data/state/*.db
-data/state/*.db-journal
 data/queue/**/*.json
 data/cache/**/*.json
 !data/.gitkeep
 !data/**/.gitkeep
-# State cache files and process files (must be after !data/**/.gitkeep)
-data/state/*.txt
-data/state/unipile_last_check.txt
-data/state/*.pid  # Process lock file
-data/state/main.pid  # Explicitly ignore main.pid
+# Exclude entire data/state directory (process files, cache, databases)
+data/state/
+!data/state/.gitkeep
+main.pid  # Process lock file (if in root)
 
 # Configuration (sensitive)
 config/google-credentials.json
