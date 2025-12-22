@@ -467,9 +467,8 @@ class LinkedInSender:
             import re
             message = re.sub(r'\s+', ' ', message.replace('\n', ' ').replace('\r', ' ')).strip()
 
-            # Truncate message to 200 characters (very conservative limit)
-            # Testing showed that messages up to 250 chars work via curl, but in practice
-            # API may count characters differently (UTF-8 bytes, special chars, etc.)
+            # Truncate message to 200 characters (LinkedIn invitation limit)
+            # LinkedIn has strict limits on invitation message length
             max_length = 200
             if len(message) > max_length:
                 original_length = len(message)
@@ -481,8 +480,10 @@ class LinkedInSender:
                     truncated = truncated[:last_space]
                 message = truncated.rstrip() + "..."
                 final_length = len(message)
-                self.logger.warning(
-                    f"Invitation message truncated from {original_length} to {final_length} characters"
+                self.logger.error(
+                    f"ERROR: Invitation message truncated from {original_length} to {final_length} characters. "
+                    f"Message was too long for LinkedIn invitation limit ({max_length} chars). "
+                    f"Original message: {message[:100]}..."
                 )
 
             # Log what we're sending for debugging
@@ -600,11 +601,18 @@ class LinkedInSender:
             message = re.sub(r'\s+', ' ', message.replace('\n', ' ').replace('\r', ' ')).strip()
             max_length = 200
             if len(message) > max_length:
+                original_length = len(message)
                 truncated = message[:max_length - 3]
                 last_space = truncated.rfind(' ')
                 if last_space > max_length - 30:
                     truncated = truncated[:last_space]
                 message = truncated.rstrip() + "..."
+                final_length = len(message)
+                self.logger.error(
+                    f"ERROR: Invitation message truncated from {original_length} to {final_length} characters. "
+                    f"Message was too long for LinkedIn invitation limit ({max_length} chars). "
+                    f"Original message: {message[:100]}..."
+                )
 
             url = f"{self.base_url}/users/invite"
             # Try with linkedin_url parameter instead of provider_id

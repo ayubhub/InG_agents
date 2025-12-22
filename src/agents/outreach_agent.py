@@ -177,10 +177,9 @@ class OutreachAgent(BaseAgent):
 
                     # Check invitation sent first (success=False but status='invitation_sent')
                     if result.status == "invitation_sent":
-                        # Message is already truncated to 200 chars in LinkedInSender
                         updates = {
                             "contact_status": "Invitation Sent",
-                            "message_sent": message,  # Already truncated to 200 chars in LinkedInSender
+                            "message_sent": message,
                             "message_sent_at": result.timestamp.isoformat() if result.timestamp else datetime.now(timezone.utc).isoformat(),
                             "notes": f"Invitation ID: {result.message_id}, Waiting for acceptance. URL: {lead.linkedin_url}",
                             "last_updated": datetime.now(timezone.utc).isoformat()
