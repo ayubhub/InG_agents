@@ -409,11 +409,19 @@ class OutreachAgent(BaseAgent):
         try:
             filters = {"contact_status": "Invitation Sent"}
             pending_leads = self.state_manager.read_leads(filters)
+            self.logger.info(f"Found {len(pending_leads)} leads with pending invitations")
 
             for lead in pending_leads:
                 try:
+                    self.logger.info(f"Checking invitation status for {lead.id}: {lead.name} (URL: {lead.linkedin_url})")
                     invite_id = self._extract_invite_id(lead.notes)
+                    if invite_id:
+                        self.logger.debug(f"Extracted invite_id: {invite_id}")
+                    else:
+                        self.logger.warning(f"Could not extract invite_id from notes: {lead.notes}")
+
                     status = self.linkedin_sender.check_invitation_status(invite_id, lead.linkedin_url)
+                    self.logger.info(f"Invitation status for {lead.id}: {status}")
 
                     now = datetime.now(timezone.utc)
 
